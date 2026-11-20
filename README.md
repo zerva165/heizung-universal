@@ -3,7 +3,47 @@
 Room-by-room heating control for Home Assistant, set up entirely through the UI.
 Raumweise Heizungssteuerung für Home Assistant, vollständig über die Oberfläche eingerichtet.
 
-[English](#english) · [Deutsch](#deutsch)
+[English](#english) · [Deutsch](#deutsch) · [Screenshots / Bilder](#screenshots--bilder)
+
+---
+
+## Screenshots / Bilder
+
+![Room card in three designs / Raumkarte in drei Designs](docs/bilder/dashboard.png)
+
+<sub>Screenshots from a local test instance with example devices; the integration's UI shown in German. · Bilder aus einer lokalen Test-Instanz mit Beispielgeräten.</sub>
+
+<details>
+<summary><b>Dashboard card designs / Kartendesigns</b></summary>
+
+<table>
+<tr><td align="center" valign="top"><a href="docs/bilder/karte_mobil.png"><img src="docs/bilder/karte_mobil.png" width="260" alt="Mobil kompakt"></a><br><sub>Mobil kompakt</sub></td><td align="center" valign="top"><a href="docs/bilder/karte_glas.png"><img src="docs/bilder/karte_glas.png" width="260" alt="Liquid-Glass"></a><br><sub>Liquid-Glass</sub></td><td align="center" valign="top"><a href="docs/bilder/karte_verlauf.png"><img src="docs/bilder/karte_verlauf.png" width="260" alt="Farbverlauf"></a><br><sub>Farbverlauf</sub></td></tr>
+</table>
+
+</details>
+
+<details>
+<summary><b>Setup wizard / Einrichtungsassistent</b> (13 steps / Schritte)</summary>
+
+<table>
+<tr><td align="center" valign="top"><a href="docs/bilder/einrichtung_01_geraete.png"><img src="docs/bilder/einrichtung_01_geraete.png" width="260" alt="1 · Devices / Geräte"></a><br><sub>1 · Devices / Geräte</sub></td><td align="center" valign="top"><a href="docs/bilder/einrichtung_02_funktionen.png"><img src="docs/bilder/einrichtung_02_funktionen.png" width="260" alt="2 · Functions / Funktionen"></a><br><sub>2 · Functions / Funktionen</sub></td><td align="center" valign="top"><a href="docs/bilder/einrichtung_03_profil.png"><img src="docs/bilder/einrichtung_03_profil.png" width="260" alt="3 · Heating profile / Heizprofil"></a><br><sub>3 · Heating profile / Heizprofil</sub></td></tr>
+<tr><td align="center" valign="top"><a href="docs/bilder/einrichtung_04_fenster.png"><img src="docs/bilder/einrichtung_04_fenster.png" width="260" alt="4 · Windows / Fenster"></a><br><sub>4 · Windows / Fenster</sub></td><td align="center" valign="top"><a href="docs/bilder/einrichtung_05_ir_sender.png"><img src="docs/bilder/einrichtung_05_ir_sender.png" width="260" alt="5 · IR transmitter / IR-Sender"></a><br><sub>5 · IR transmitter / IR-Sender</sub></td><td align="center" valign="top"><a href="docs/bilder/einrichtung_06_ir_befehle.png"><img src="docs/bilder/einrichtung_06_ir_befehle.png" width="260" alt="6 · Detected IR commands / Erkannte IR-Befehle"></a><br><sub>6 · Detected IR commands / Erkannte IR-Befehle</sub></td></tr>
+<tr><td align="center" valign="top"><a href="docs/bilder/einrichtung_07_ir_auswahl.png"><img src="docs/bilder/einrichtung_07_ir_auswahl.png" width="260" alt="7 · Learn or test / Anlernen oder testen"></a><br><sub>7 · Learn or test / Anlernen oder testen</sub></td><td align="center" valign="top"><a href="docs/bilder/einrichtung_08_ir_anlernen.png"><img src="docs/bilder/einrichtung_08_ir_anlernen.png" width="260" alt="8 · Learn a command / Befehl anlernen"></a><br><sub>8 · Learn a command / Befehl anlernen</sub></td><td align="center" valign="top"><a href="docs/bilder/einrichtung_09_ir_testen.png"><img src="docs/bilder/einrichtung_09_ir_testen.png" width="260" alt="9 · Test a command / Befehl testen"></a><br><sub>9 · Test a command / Befehl testen</sub></td></tr>
+<tr><td align="center" valign="top"><a href="docs/bilder/einrichtung_10_pv.png"><img src="docs/bilder/einrichtung_10_pv.png" width="260" alt="10 · PV surplus heating / PV-Überschussheizen"></a><br><sub>10 · PV surplus heating / PV-Überschussheizen</sub></td><td align="center" valign="top"><a href="docs/bilder/einrichtung_11_dashboard_bereich.png"><img src="docs/bilder/einrichtung_11_dashboard_bereich.png" width="260" alt="11 · Dashboard section / Bereich"></a><br><sub>11 · Dashboard section / Bereich</sub></td><td align="center" valign="top"><a href="docs/bilder/einrichtung_12_position_design.png"><img src="docs/bilder/einrichtung_12_position_design.png" width="260" alt="12 · Position & design"></a><br><sub>12 · Position & design</sub></td></tr>
+<tr><td align="center" valign="top"><a href="docs/bilder/einrichtung_13_zusammenfassung.png"><img src="docs/bilder/einrichtung_13_zusammenfassung.png" width="260" alt="13 · Summary / Zusammenfassung"></a><br><sub>13 · Summary / Zusammenfassung</sub></td></tr>
+</table>
+
+</details>
+
+<details>
+<summary><b>After setup: configure, replace devices / Nach der Einrichtung: Konfigurieren, Gerät austauschen</b></summary>
+
+<table>
+<tr><td align="center" valign="top"><a href="docs/bilder/integration.png"><img src="docs/bilder/integration.png" width="260" alt="One entry per room / Ein Eintrag je Raum"></a><br><sub>One entry per room / Ein Eintrag je Raum</sub></td><td align="center" valign="top"><a href="docs/bilder/konfigurieren_menue.png"><img src="docs/bilder/konfigurieren_menue.png" width="260" alt="Configure / Konfigurieren"></a><br><sub>Configure / Konfigurieren</sub></td><td align="center" valign="top"><a href="docs/bilder/geraet_austauschen.png"><img src="docs/bilder/geraet_austauschen.png" width="260" alt="Replace a device / Gerät austauschen"></a><br><sub>Replace a device / Gerät austauschen</sub></td></tr>
+<tr><td align="center" valign="top"><a href="docs/bilder/geraet_neu.png"><img src="docs/bilder/geraet_neu.png" width="260" alt="New device / Neues Gerät"></a><br><sub>New device / Neues Gerät</sub></td><td align="center" valign="top"><a href="docs/bilder/automationen.png"><img src="docs/bilder/automationen.png" width="260" alt="Created automations / Angelegte Automationen"></a><br><sub>Created automations / Angelegte Automationen</sub></td></tr>
+</table>
+
+</details>
 
 ---
 
