@@ -1,0 +1,166 @@
+{
+ "states": [
+  {
+   "entity_id": "climate.buero_bt",
+   "state": "heat",
+   "attributes": {
+    "friendly_name": "Büro",
+    "temperature": 22,
+    "current_temperature": 20.9,
+    "hvac_action": "heating",
+    "batteries": "{\"sensor.buero_temperatur\": {\"battery\": \"100\"}, \"sensor.buero_luftfeuchte\": {\"battery\": \"100\"}, \"climate.buero_trv\": {\"battery\": \"off\"}}"
+   }
+  },
+  {
+   "entity_id": "climate.buero_trv",
+   "state": "heat",
+   "attributes": {
+    "friendly_name": "Büro Heizkörperthermostat",
+    "temperature": 30.5
+   }
+  },
+  {
+   "entity_id": "climate.wohnzimmer_bt",
+   "state": "heat",
+   "attributes": {
+    "friendly_name": "Wohnzimmer Thermostat",
+    "batteries": "{\"sensor.wohnzimmer_raumfuehler_temperatur\": {\"battery\": \"off\"}, \"climate.wohnzimmer_trv_links\": {\"battery\": \"off\"}, \"climate.wohnzimmer_trv_rechts\": {\"battery\": \"off\"}}"
+   }
+  },
+  {
+   "entity_id": "climate.wohnzimmer_trv_links",
+   "state": "heat",
+   "attributes": {
+    "friendly_name": "Wohnzimmer Heizkörperthermostat links"
+   }
+  },
+  {
+   "entity_id": "climate.wohnzimmer_trv_rechts",
+   "state": "heat",
+   "attributes": {
+    "friendly_name": "Wohnzimmer Heizkörperthermostat rechts"
+   }
+  },
+  {
+   "entity_id": "sensor.buero_temperatur",
+   "state": "20.9",
+   "attributes": {
+    "device_class": "temperature",
+    "friendly_name": "Büro Temperatur"
+   }
+  },
+  {
+   "entity_id": "sensor.wohnzimmer_raumfuehler_temperatur",
+   "state": "21.9",
+   "attributes": {
+    "device_class": "temperature",
+    "friendly_name": "Wohnzimmer Raumfühler"
+   }
+  },
+  {
+   "entity_id": "sensor.aussentemperatur_mittel",
+   "state": "12.3",
+   "attributes": {
+    "device_class": "temperature",
+    "friendly_name": "Außentemperatur (Mittelwert)"
+   }
+  },
+  {
+   "entity_id": "sensor.heizkreis_1_betriebszustand",
+   "state": "Normal",
+   "attributes": {
+    "friendly_name": "Heizkreis 1 Betriebszustand"
+   }
+  },
+  {
+   "entity_id": "input_boolean.heizung_aus_global",
+   "state": "off",
+   "attributes": {
+    "friendly_name": "Heizung Aus (global)"
+   }
+  },
+  {
+   "entity_id": "binary_sensor.buero_fenster_contact",
+   "state": "off",
+   "attributes": {
+    "device_class": "window",
+    "friendly_name": "Büro Fenster (Testkontakt)"
+   }
+  },
+  {
+   "entity_id": "binary_sensor.wohnzimmer_fenster_rechts",
+   "state": "off",
+   "attributes": {
+    "device_class": "window",
+    "friendly_name": "Wohnzimmer Fenster rechts"
+   }
+  },
+  {
+   "entity_id": "binary_sensor.wohnzimmer_fenster_links",
+   "state": "off",
+   "attributes": {
+    "device_class": "door",
+    "friendly_name": "Wohnzimmer Fenster links"
+   }
+  },
+  {
+   "entity_id": "remote.wohnzimmer_klima_ir",
+   "state": "on",
+   "attributes": {
+    "friendly_name": "Klimaanlage Wohnzimmer"
+   }
+  },
+  {
+   "entity_id": "sensor.wohnzimmer_trv_links_ventil_offnungsgrad",
+   "state": "0",
+   "attributes": {}
+  },
+  {
+   "entity_id": "sensor.wohnzimmer_trv_rechts_ventil_offnungsgrad",
+   "state": "0",
+   "attributes": {}
+  },
+  {
+   "entity_id": "sensor.pv_speicher_ladestand",
+   "state": "82",
+   "attributes": {}
+  },
+  {
+   "entity_id": "sensor.pv_netz_einspeisung",
+   "state": "-40",
+   "attributes": {}
+  },
+  {
+   "entity_id": "sensor.pv_speicher_leistung",
+   "state": "-1042",
+   "attributes": {}
+  },
+  {
+   "entity_id": "sensor.pv_erzeugung",
+   "state": "11",
+   "attributes": {}
+  },
+  {
+   "entity_id": "sensor.pv_hausverbrauch",
+   "state": "1093",
+   "attributes": {}
+  },
+  {
+   "entity_id": "automation.buero_heizprofil_alt",
+   "state": "on",
+   "attributes": {
+    "friendly_name": "Büro Heizprofil"
+   }
+  }
+ ],
+ "registry": [
+  {
+   "entity_id": "climate.buero_bt",
+   "platform": "better_thermostat"
+  },
+  {
+   "entity_id": "climate.wohnzimmer_bt",
+   "platform": "better_thermostat"
+  }
+ ]
+}

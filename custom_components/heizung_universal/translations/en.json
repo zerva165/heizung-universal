@@ -1,0 +1,848 @@
+{
+  "title": "Heizung Universal",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up room – devices",
+        "description": "Sets up heating control for one room. At the end, all required helpers, schedules, automations (from the three blueprints) and the dashboard card are created automatically. Existing automations are not changed.",
+        "data": {
+          "raum_name": "Room name",
+          "bt": "Better Thermostat of the room",
+          "raumfuehler": "External room temperature sensor (optional)",
+          "aussen": "Outdoor temperature",
+          "haus_aus": "Global “heating off” switch (optional)"
+        },
+        "data_description": {
+          "bt": "Better Thermostat keeps controlling the radiator thermostats itself.",
+          "raumfuehler": "Leave empty to use the temperature measured by Better Thermostat."
+        }
+      },
+      "funktionen": {
+        "title": "Room {raum} – functions",
+        "description": "All additional functions are fully included and switched off by default. Only the helpers needed by the selected functions are created.",
+        "data": {
+          "profile": "Heating profiles (always included as well: Sommer and Aus)",
+          "sommer_heizen": "Heat at times in the Sommer profile (otherwise frost protection)",
+          "zeitquelle": "Heating times",
+          "fenster_modus": "Window monitoring",
+          "boost": "Heating boost",
+          "vorheizen": "Predictive pre-heating before heating starts",
+          "mindest": "Reach a minimum temperature at fixed times",
+          "zieltermin": "Reach a target temperature at fixed times",
+          "klima": "Air conditioning automation",
+          "klima_art": "Type of air conditioner",
+          "pv": "PV surplus heating via the air conditioner",
+          "karte": "Create and place a dashboard card",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "profil": {
+        "title": "Profile {profil} ({nr} of {anzahl})",
+        "description": "Each profile has three independent day schedules – Monday to Friday, Saturday, Sunday – each with up to three heating periods. Within an enabled heating period the target temperature applies, otherwise the setback temperature. {art}\n\nIf the end is before the start, the heating period runs past midnight.",
+        "data": {
+          "soll": "Target temperature",
+          "absenk": "Setback temperature",
+          "vh": "Pre-heat predictively before every heating start",
+          "vh_temp": "Minimum temperature to be reached when heating starts",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "sections": {
+          "montag_bis_freitag": {
+            "name": "{profil} – Monday to Friday",
+            "data": {
+              "heizphase_1_verwenden": "Heating period 1 – use",
+              "heizphase_1_beginn": "Heating period 1 – start",
+              "heizphase_1_ende": "Heating period 1 – end",
+              "heizphase_2_verwenden": "Heating period 2 – use",
+              "heizphase_2_beginn": "Heating period 2 – start",
+              "heizphase_2_ende": "Heating period 2 – end",
+              "heizphase_3_verwenden": "Heating period 3 – use",
+              "heizphase_3_beginn": "Heating period 3 – start",
+              "heizphase_3_ende": "Heating period 3 – end"
+            }
+          },
+          "samstag": {
+            "name": "{profil} – Saturday",
+            "data": {
+              "heizphase_1_verwenden": "Heating period 1 – use",
+              "heizphase_1_beginn": "Heating period 1 – start",
+              "heizphase_1_ende": "Heating period 1 – end",
+              "heizphase_2_verwenden": "Heating period 2 – use",
+              "heizphase_2_beginn": "Heating period 2 – start",
+              "heizphase_2_ende": "Heating period 2 – end",
+              "heizphase_3_verwenden": "Heating period 3 – use",
+              "heizphase_3_beginn": "Heating period 3 – start",
+              "heizphase_3_ende": "Heating period 3 – end"
+            }
+          },
+          "sonntag": {
+            "name": "{profil} – Sunday",
+            "data": {
+              "heizphase_1_verwenden": "Heating period 1 – use",
+              "heizphase_1_beginn": "Heating period 1 – start",
+              "heizphase_1_ende": "Heating period 1 – end",
+              "heizphase_2_verwenden": "Heating period 2 – use",
+              "heizphase_2_beginn": "Heating period 2 – start",
+              "heizphase_2_ende": "Heating period 2 – end",
+              "heizphase_3_verwenden": "Heating period 3 – use",
+              "heizphase_3_beginn": "Heating period 3 – start",
+              "heizphase_3_ende": "Heating period 3 – end"
+            }
+          }
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "fenster": {
+        "title": "Windows",
+        "description": "The room heating maintains this room's window status from the contacts (if a contact becomes unavailable, its last state is kept for 10 minutes, then heating is released and a one-time notification is sent). {reaktion} The air conditioner and PV heating use the same window status – contacts are later replaced in one place only (automation “Heizung …” or “Configure → Replace a device”). {herkunft}",
+        "data": {
+          "fensterkontakte": "Window contacts of the room",
+          "fenster_ausnahmen": "Contacts that do not pause the air conditioner and PV heating (e.g. balcony door)",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "fenster_ausnahmen": "These contacts only pause the heating. Leave empty if all contacts should also pause air conditioning and PV.",
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "fenster_extern": {
+        "title": "Windows",
+        "description": "The window status of the other room is also entered in Better Thermostat as window sensor.",
+        "data": {
+          "fensterstatus_extern": "Window status helper of the other room",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "werte": {
+        "title": "Basic values",
+        "data": {
+          "frostschutz": "Frost protection temperature (profile Aus, locks)",
+          "aussensperre": "No heating from outdoor temperature (0 = no lock)",
+          "boost_dauer": "Boost duration",
+          "vorheizen_max": "Maximum lead time for pre-heating and appointments",
+          "waermeerzeuger": "Operating state of the heat source (optional)",
+          "mindest_halten": "Keep the minimum temperature after the appointment",
+          "zieltermin_halten": "Keep the target temperature after the appointment",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "waermeerzeuger": "For example the operating state of the heating circuit (heat pump or boiler). In reduced operation a longer lead time is assumed.",
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "termin": {
+        "title": "Minimum and target temperature appointments",
+        "description": "The temperature should be reached at the selected time. To achieve this, the setpoint is raised in time (never lowered). Up to 4 appointments per type and profile are possible, also several on the same day. All appointments can be changed later in the blueprint.\n\nEntered so far:\n{liste}",
+        "data": {
+          "art": "Type",
+          "profil": "Applies in heating profile",
+          "tage": "Weekdays",
+          "zeit": "Time at which the temperature should be reached",
+          "temp": "Temperature",
+          "weiterer": "Enter another appointment afterwards",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "klima_sender": {
+        "title": "Air conditioner in room {raum} – IR transmitter",
+        "description": "Choose the IR transmitter **of this room** (e.g. the Broadlink in the living room or the one in the bedroom). PV surplus heating automatically uses the same transmitter.\n\n{grund}\n\nOn the next page the integration reads which commands the previous control sent via this transmitter and which are already learned there, and pre-fills everything. Nothing is sent and nothing is learned in the process.\n\n{fehler}",
+        "data": {
+          "klima_sender": "IR transmitter (remote entity)",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "klima": {
+        "title": "Air conditioner in room {raum} – IR commands",
+        "description": "IR transmitter `{sender}`. **Detected:**\n{erkennung}\n\nThe fields are pre-filled accordingly – usually just check and continue. {stufe} in the command name stands for the temperature (power_{stufe} → power_20), {luefter} for the fan level. Several additional commands are separated by commas and sent one after another, 1 s apart. Missing commands are learned with you in the next step; existing ones are never replaced without your explicit consent.",
+        "data": {
+          "ir_geraet": "Device name of the IR commands in this transmitter",
+          "ir_pruefen": "Check commands individually anyway (send as a test or learn again)",
+          "befehl_kuehlen": "Command name for cooling",
+          "befehl_zusatz": "Additional commands after cooling (optional, comma-separated)",
+          "befehl_aus": "Command name for off",
+          "stufe_min": "Lowest cooling temperature",
+          "stufe_max": "Highest cooling temperature",
+          "luefter": "Fan level (optional)",
+          "klima_fenster": "Window contacts that pause the air conditioner (optional)",
+          "befehl_heizen": "Command name for heating (complete state; used by PV surplus heating of this room)",
+          "befehl_heizen_aus": "Command name for heating off",
+          "klima_steckdose": "Smart plug of the air conditioner (optional)",
+          "klima_leistung": "Power measurement of the air conditioner (optional)",
+          "laeuft_ab_w": "Air conditioner counts as running from",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "luefter": "For example auto, low or high – only needed if the command names contain a fan level.",
+          "klima_steckdose": "Switchable smart plug with power metering in front of the air conditioner. It stays switched on permanently: before every IR command it is switched on if necessary, and switched on again after being switched off by mistake – it is never switched off.",
+          "klima_leistung": "Leave empty: the power sensor of the same plug is used automatically. The control uses it to check whether the air conditioner executed a command – otherwise it repeats once, then notifies.",
+          "laeuft_ab_w": "Above the standby consumption (usually 1–3 W) and below the power of the fan alone.",
+          "ir_geraet": "The transmitter stores this room's commands under this name (parameter “device”), e.g. klima.",
+          "befehl_zusatz": "For example eco_{stufe} or eco_{stufe}, display_off – exactly as the previous control sent it.",
+          "ir_pruefen": "Without the tick, the flow continues directly if all commands exist. Missing commands always lead to learning.",
+          "befehl_heizen": "Leave empty if this room is not heated via the air conditioner.",
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "lernen_auswahl": {
+        "title": "IR commands – choose per command",
+        "description": "Room **{raum}** · IR transmitter `{sender}` · device name `{geraet}`\n\n{stand}\n\nThese commands belong to this room and this transmitter only. For each command:\n- **not ticked** = use the existing command (nothing is sent and nothing is learned)\n- **“learn again”** = learn the command via this transmitter with `remote.learn_command` and test it afterwards\n- **“test”** = send the existing command once with `remote.send_command`\n\nMany air conditioners send their **complete state** (mode, temperature, fan) with every key press. In that case, set up the remote control so that the last key press produces exactly the desired state.",
+        "data": {
+          "befehle": "Learn again",
+          "testen": "Send existing command as a test",
+          "ueberschreiben": "Existing commands may be replaced by learning",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "ueberschreiben": "Without this tick, no existing command is changed.",
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "lernen": {
+        "title": "Learn command {nr} of {anzahl}",
+        "description": "**{befehl}** – {bedeutung}\n\n1. Prepare the remote control (one step before the desired state).\n2. Choose “Learn now” below and click **Submit**.\n3. As soon as the lamp on IR transmitter `{sender}` lights up: point the remote control at the transmitter and press the key (within 30 seconds).\n\nThe Home Assistant action `remote.learn_command` is used.",
+        "data": {
+          "aktion": "Action"
+        }
+      },
+      "lernen_test": {
+        "title": "Test command",
+        "description": "**{befehl}** ({bedeutung}) {herkunft}.\n\nTest the command with the action `remote.send_command` via `{sender}` and check whether the air conditioner in room **{raum}** responds correctly – this makes sure the command belongs to the right room.\n\n{status}",
+        "data": {
+          "aktion": "Action"
+        }
+      },
+      "klima_schalter": {
+        "title": "Air conditioner on a switchable smart plug – {raum}",
+        "description": "The plug only switches the air conditioner on and off; temperature and fan are set by the unit itself. Automatic mode: on when the room is warmer than the target temperature plus the switch-on offset, off when it is cooler than the target minus the switch-off offset (example: target 22 °C, +0.5 / −0.0 → on above 22.5 °C, off below 22.0 °C). “Manuell” on the card = continuous operation. Everything can be changed later in the automation “Klima {raum}”.",
+        "data": {
+          "klima_schalter": "Switchable smart plug of the air conditioner",
+          "klima_ziel_start": "Target temperature (initial value)",
+          "ein_ueber": "Switch on when warmer than target plus",
+          "aus_unter": "Switch off when cooler than target minus",
+          "kuehl_profile": "Cooling allowed in the heating profiles",
+          "anwesenheit": "Only cool when someone is present (person or switch, optional)",
+          "abwesend_aus": "When leaving, also set the air conditioning mode to Aus",
+          "klima_fenster": "Window contacts that pause the air conditioner (optional)",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "kuehl_profile": "Default Sommer and Aus – so the air conditioner does not cool while the heating is heating.",
+          "abwesend_aus": "After returning, the air conditioner is switched on again deliberately.",
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "pv": {
+        "title": "PV surplus heating",
+        "description": "Sequence: start on surplus with a full battery, close the radiators, the air conditioner heats, heat check, pauses and safety release. All thresholds can be adjusted later in the blueprint.\n\n**Heating commands:** They are sent via the air conditioner's Broadlink (device name `{geraet}`). With {stufe} in the command name there is one command per heating level, e.g. `heizen_22` … `heizen_28`; PV heating sends the selected heating level, which can be changed later without learning again. “Check now” leads directly to learning the missing commands on exactly this Broadlink – each one is then sent once as a test.\n\n{uebernahme}\n\n{heiz_stand}\n\n{fehler}",
+        "data": {
+          "pv_sender": "Broadlink of the air conditioner (also sends the heating commands)",
+          "befehl_heizen": "Command name for heating",
+          "heiz_stufe_min": "Heating levels from",
+          "heiz_stufe_max": "Heating levels to",
+          "pv_heizstufe": "Heating level for PV heating",
+          "befehl_heizen_aus": "Command name for heating off",
+          "heiz_anlernen": "Heating commands",
+          "pv_raumfuehler": "Room temperature sensor",
+          "pv_trvs": "Radiator thermostats of the room (closed before PV heating)",
+          "pv_ventile": "Valve position sensors (optional)",
+          "pv_fenster": "Windows that block PV heating (optional)",
+          "soc": "Battery state of charge",
+          "netz": "Grid export (positive = export)",
+          "akku_leistung": "Battery power (positive = charging)",
+          "pv_leistung": "PV power",
+          "verbrauch": "House consumption",
+          "zeitstempel_attribut": "Timestamp attribute of the energy data (optional)",
+          "start_leistung": "Start from grid export",
+          "soc_start": "Start from battery state of charge",
+          "soc_halten": "Keep heating from battery state of charge",
+          "pv_ziel": "PV target temperature",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "dashboard": {
+        "title": "Dashboard card – dashboards",
+        "description": "Which dashboards should the room card be added to? Several can be selected. For each selected dashboard you then choose view, section, position and design – the card is styled to match the existing cards.",
+        "data": {
+          "dashboards": "Dashboards",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "ansicht": {
+        "title": "{dashboard} – view",
+        "description": "In which view of **{dashboard}** should the card be placed?\n\n★ = this view already contains room cards (preselected).",
+        "data": {
+          "ansicht": "View",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "platz": {
+        "title": "{dashboard} – section",
+        "description": "Layout of view **{ansicht}** (★ = room cards are already here):\n\n{uebersicht}\n\nChoose the section for the card. Recommended sections are listed first and preselected; any other section works as well – including stacks, grids and tabdeck tabs.",
+        "data": {
+          "platz": "Section",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "position": {
+        "title": "{dashboard} – position and design",
+        "description": "**{ansicht} › {platz}**\n\n{bild}\n\nSuggested design (detected from the existing cards): **{erkannt}**. The card can be moved later in the dashboard editor or placed again via “Configure”.",
+        "data": {
+          "position": "Card position",
+          "design": "Card design",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "altsteuerung": {
+        "title": "Previous control in room {raum}",
+        "description": "The previous control was found for this Better Thermostat (and the air conditioning transmitter, if any): **{anz_auto} automations**, **{anz_skript} scripts** and **{anz_helfer} helpers**. On creation, the selected automations are switched off, the scripts disabled and both marked with “(alt)” in their name; the selected helpers get “(alt)” in their display name. Nothing is deleted – via “Configure” everything can be switched on again or deleted permanently after a test week.\n\n**Other automations and scripts that use previous helpers of this room** (stay switched on):\n{abhaengig}\n\n**Shared with other rooms** (stay unchanged):\n{gemeinsam}\n\n{warnungen}",
+        "data": {
+          "abschalten": "Switch off or disable and append “(alt)”",
+          "helfer": "Mark helpers with “(alt)”",
+          "umstellen": "Switch dependent automations and scripts to the new helpers",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "umstellen": "Only where an equivalent new helper exists (same options). The originals are backed up.",
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "alte_karten": {
+        "title": "Previous dashboard cards – {raum}",
+        "description": "These {anzahl} cards belong to this room's previous control (they use its scripts, automations or helpers). After the switch-over their buttons no longer work. Ticked cards are removed – especially in nested dashboards this is easier here than in the dashboard editor. Every affected dashboard is backed up first; “Switch the previous control on again” puts the cards back in place. Cards that only show the thermostat and summary cards with other rooms do not appear here.",
+        "data": {
+          "karten": "Remove these previous cards",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "bestaetigen": {
+        "title": "Create room {raum}",
+        "description": "The following will be created:\n\n**Automations**\n{automationen}\n\n**{anzahl} helpers**\n{helfer}\n\n**Dashboard card:** {karte}\n\n{hinweise}\n\nThe three blueprints are installed if needed. Existing automations, helpers and dashboard cards remain unchanged.",
+        "data": {
+          "bestaetigt": "Yes, create now",
+          "aendern": "Or change something – back to",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "aendern": "All previous entries are kept and pre-filled. Afterwards you come back here.",
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      }
+    },
+    "error": {
+      "kein_profil": "Please select at least one heating profile.",
+      "pflichtfeld": "Please select the required devices or sensors – or choose “Back to the previous step” below.",
+      "pv_braucht_klima": "PV surplus heating requires the air conditioning automation of this room.",
+      "heizstufe_bereich": "The heating level for PV heating must be between “Heating levels from” and “Heating levels to”.",
+      "pv_braucht_ir": "PV surplus heating requires an air conditioner with an IR transmitter (a smart plug cannot switch it to heating).",
+      "zeit_gleich": "Start and end of a heating period must not be the same.",
+      "absenk_hoeher": "The setback temperature must not be higher than the target temperature.",
+      "kein_tag": "Please select at least one weekday.",
+      "zu_viele": "All appointments of this type are already used for this profile (at most 4, in the summer profile 2).",
+      "stufen": "The lowest level must not be higher than the highest level.",
+      "sender_nicht_bereit": "The IR transmitter is not switched on or not reachable (state: {fehler}).",
+      "senden_fehlgeschlagen": "The command could not be sent: {fehler}",
+      "lernen_fehlgeschlagen": "Learning failed: {fehler}",
+      "ueberschreiben": "At least one selected command already exists in the transmitter. To replace it, tick the box – or deselect the command.",
+      "nicht_bestaetigt": "Please confirm the creation.",
+      "kein_dashboard": "Please select at least one dashboard.",
+      "bt_belegt": "This Better Thermostat is already controlled by room “{belegt}” of this integration. Please remove that room first.",
+      "alt_pv_laeuft": "Nothing was created and nothing was changed: {fehler}",
+      "anlegen_fehlgeschlagen": "Creation failed – everything created so far has been removed again. Cause: {fehler}"
+    },
+    "abort": {
+      "already_configured": "This room is already configured.",
+      "keine_ansicht": "This dashboard has no view.",
+      "vorschau_fehlgeschlagen": "Home Assistant could not be read: {fehler}",
+      "funktionen_fertig": "Functions changed:\n{liste}\n\nErrors while cleaning up: {fehler}",
+      "aendern_fehlgeschlagen": "Functions not changed – the previous state has been restored. Cause: {fehler}",
+      "nichts_geaendert": "No function was changed – nothing to do.",
+      "alte_karten_fertig": "Removed (dashboards backed up beforehand):\n{liste}\n\nNot removed: {fehler}",
+      "keine_alten_karten": "No cards of this room's previous control were found in the dashboards.",
+      "keine_auswahl": "No card selected – nothing removed.",
+      "geraet_fertig": "{alt} was replaced by {neu} in:\n{liste}{hinweis}",
+      "keine_klima": "No air conditioning automation is set up for this room.",
+      "ir_fertig": "IR learning finished. Learned commands: {anzahl}.{freigabe}",
+      "keine_klima_ir": "No air conditioner with an IR transmitter is set up for this room. For an air conditioner on a switchable smart plug, the plug itself is the actuator (automation “Klima <room>”).",
+      "steckdose_fertig": "{stand}\n\nChanged automations:\n{liste}",
+      "steckdose_fehlgeschlagen": "The air conditioner's smart plug was not changed: {fehler}",
+      "karte_fertig": "The room card was placed again (number of dashboards: {anzahl}).",
+      "alt_zurueck_fertig": "The previous control is switched on again, the new control of this room is paused. Messages: {fehler}",
+      "alt_neu_fertig": "The new control is active again, the previous control has been switched off and marked again.",
+      "alt_geloescht": "The previous control was deleted. Backup: {datei}. Messages: {fehler}"
+    },
+    "create_entry": {
+      "hinweis": "Room {raum} has been created and is running.\n\n⚠ {hinweis}"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Adjust room",
+        "menu_options": {
+          "funktionen": "Change functions (e.g. boost, windows, profiles, add or remove air conditioning)",
+          "geraet": "Replace a device (e.g. broken window contact, thermostat, sensor, Broadlink)",
+          "ir": "Learn (again) and test the air conditioner's IR commands",
+          "steckdose": "Set up or change the air conditioner's smart plug (always on, feedback via power)",
+          "alte_karten": "Remove previous dashboard cards of this room",
+          "karte": "Place the dashboard card again (one or more dashboards, selectable design)",
+          "alt_zurueck": "Switch the previous control on again (pause the new control)",
+          "alt_neu": "Take over with the new control again (switch the previous one off again)",
+          "alt_loeschen": "Delete the previous control permanently"
+        }
+      },
+      "alt_zurueck": {
+        "title": "Switch the previous control on again",
+        "description": "This previous control is switched on again, names without “(alt)”, scripts enabled again:\n{liste}\n\nIn addition, {helfer} helper names are reset and {abhaengig} switched automations/scripts are restored to their original. The new control ({neu}) is switched off.",
+        "data": {
+          "bestaetigt": "Yes, switch the previous control on again"
+        }
+      },
+      "alt_neu": {
+        "title": "Take over with the new control again",
+        "description": "The previous control is switched off and marked again:\n{liste}\n\nThe new control ({neu}) is switched on.",
+        "data": {
+          "bestaetigt": "Yes, take over with the new control"
+        }
+      },
+      "alt_loeschen": {
+        "title": "Delete the previous control permanently",
+        "description": "These automations and scripts will be deleted:\n{liste}\n\nEverything is backed up to files first (`config/heizung_universal/<raum>/`). Home Assistant cannot restore deleted items.\n\n**Helpers that are still used elsewhere** (not preselected):\n{verwendet}",
+        "data": {
+          "helfer": "Delete these helpers as well",
+          "bestaetigt": "Yes, delete permanently"
+        }
+      },
+      "lernen_auswahl": {
+        "title": "IR commands – choose per command",
+        "description": "Room **{raum}** · IR transmitter `{sender}` · device name `{geraet}`\n\n{stand}\n\nThese commands belong to this room and this transmitter only. For each command:\n- **not ticked** = use the existing command (nothing is sent and nothing is learned)\n- **“learn again”** = learn the command via this transmitter with `remote.learn_command` and test it afterwards\n- **“test”** = send the existing command once with `remote.send_command`\n\nMany air conditioners send their **complete state** (mode, temperature, fan) with every key press. In that case, set up the remote control so that the last key press produces exactly the desired state.",
+        "data": {
+          "befehle": "Learn again",
+          "testen": "Send existing command as a test",
+          "ueberschreiben": "Existing commands may be replaced by learning",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "ueberschreiben": "Without this tick, no existing command is changed.",
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "lernen": {
+        "title": "Learn command {nr} of {anzahl}",
+        "description": "**{befehl}** – {bedeutung}\n\n1. Prepare the remote control (one step before the desired state).\n2. Choose “Learn now” below and click **Submit**.\n3. As soon as the lamp on IR transmitter `{sender}` lights up: point the remote control at the transmitter and press the key (within 30 seconds).\n\nThe Home Assistant action `remote.learn_command` is used.",
+        "data": {
+          "aktion": "Action"
+        }
+      },
+      "lernen_test": {
+        "title": "Test command",
+        "description": "**{befehl}** ({bedeutung}) {herkunft}.\n\nTest the command with the action `remote.send_command` via `{sender}` and check whether the air conditioner in room **{raum}** responds correctly – this makes sure the command belongs to the right room.\n\n{status}",
+        "data": {
+          "aktion": "Action"
+        }
+      },
+      "dashboard": {
+        "title": "Dashboard card – dashboards",
+        "description": "Which dashboards should the room card be added to? Several can be selected. For each selected dashboard you then choose view, section, position and design – the card is styled to match the existing cards.",
+        "data": {
+          "dashboards": "Dashboards",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "ansicht": {
+        "title": "{dashboard} – view",
+        "description": "In which view of **{dashboard}** should the card be placed?\n\n★ = this view already contains room cards (preselected).",
+        "data": {
+          "ansicht": "View",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "platz": {
+        "title": "{dashboard} – section",
+        "description": "Layout of view **{ansicht}** (★ = room cards are already here):\n\n{uebersicht}\n\nChoose the section for the card. Recommended sections are listed first and preselected; any other section works as well – including stacks, grids and tabdeck tabs.",
+        "data": {
+          "platz": "Section",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "position": {
+        "title": "{dashboard} – position and design",
+        "description": "**{ansicht} › {platz}**\n\n{bild}\n\nSuggested design (detected from the existing cards): **{erkannt}**. The card can be moved later in the dashboard editor or placed again via “Configure”.",
+        "data": {
+          "position": "Card position",
+          "design": "Card design",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "profil": {
+        "title": "Profile {profil} ({nr} of {anzahl})",
+        "description": "Each profile has three independent day schedules – Monday to Friday, Saturday, Sunday – each with up to three heating periods. Within an enabled heating period the target temperature applies, otherwise the setback temperature. {art}\n\nIf the end is before the start, the heating period runs past midnight.",
+        "data": {
+          "soll": "Target temperature",
+          "absenk": "Setback temperature",
+          "vh": "Pre-heat predictively before every heating start",
+          "vh_temp": "Minimum temperature to be reached when heating starts",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "sections": {
+          "montag_bis_freitag": {
+            "name": "{profil} – Monday to Friday",
+            "data": {
+              "heizphase_1_verwenden": "Heating period 1 – use",
+              "heizphase_1_beginn": "Heating period 1 – start",
+              "heizphase_1_ende": "Heating period 1 – end",
+              "heizphase_2_verwenden": "Heating period 2 – use",
+              "heizphase_2_beginn": "Heating period 2 – start",
+              "heizphase_2_ende": "Heating period 2 – end",
+              "heizphase_3_verwenden": "Heating period 3 – use",
+              "heizphase_3_beginn": "Heating period 3 – start",
+              "heizphase_3_ende": "Heating period 3 – end"
+            }
+          },
+          "samstag": {
+            "name": "{profil} – Saturday",
+            "data": {
+              "heizphase_1_verwenden": "Heating period 1 – use",
+              "heizphase_1_beginn": "Heating period 1 – start",
+              "heizphase_1_ende": "Heating period 1 – end",
+              "heizphase_2_verwenden": "Heating period 2 – use",
+              "heizphase_2_beginn": "Heating period 2 – start",
+              "heizphase_2_ende": "Heating period 2 – end",
+              "heizphase_3_verwenden": "Heating period 3 – use",
+              "heizphase_3_beginn": "Heating period 3 – start",
+              "heizphase_3_ende": "Heating period 3 – end"
+            }
+          },
+          "sonntag": {
+            "name": "{profil} – Sunday",
+            "data": {
+              "heizphase_1_verwenden": "Heating period 1 – use",
+              "heizphase_1_beginn": "Heating period 1 – start",
+              "heizphase_1_ende": "Heating period 1 – end",
+              "heizphase_2_verwenden": "Heating period 2 – use",
+              "heizphase_2_beginn": "Heating period 2 – start",
+              "heizphase_2_ende": "Heating period 2 – end",
+              "heizphase_3_verwenden": "Heating period 3 – use",
+              "heizphase_3_beginn": "Heating period 3 – start",
+              "heizphase_3_ende": "Heating period 3 – end"
+            }
+          }
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "fenster": {
+        "title": "Windows",
+        "description": "The room heating maintains this room's window status from the contacts (if a contact becomes unavailable, its last state is kept for 10 minutes, then heating is released and a one-time notification is sent). {reaktion} The air conditioner and PV heating use the same window status – contacts are later replaced in one place only (automation “Heizung …” or “Configure → Replace a device”). {herkunft}",
+        "data": {
+          "fensterkontakte": "Window contacts of the room",
+          "fenster_ausnahmen": "Contacts that do not pause the air conditioner and PV heating (e.g. balcony door)",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "fenster_ausnahmen": "These contacts only pause the heating. Leave empty if all contacts should also pause air conditioning and PV.",
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "fenster_extern": {
+        "title": "Windows",
+        "description": "The window status of the other room is also entered in Better Thermostat as window sensor.",
+        "data": {
+          "fensterstatus_extern": "Window status helper of the other room",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "werte": {
+        "title": "Basic values",
+        "data": {
+          "frostschutz": "Frost protection temperature (profile Aus, locks)",
+          "aussensperre": "No heating from outdoor temperature (0 = no lock)",
+          "boost_dauer": "Boost duration",
+          "vorheizen_max": "Maximum lead time for pre-heating and appointments",
+          "waermeerzeuger": "Operating state of the heat source (optional)",
+          "mindest_halten": "Keep the minimum temperature after the appointment",
+          "zieltermin_halten": "Keep the target temperature after the appointment",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "waermeerzeuger": "For example the operating state of the heating circuit (heat pump or boiler). In reduced operation a longer lead time is assumed.",
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "termin": {
+        "title": "Minimum and target temperature appointments",
+        "description": "The temperature should be reached at the selected time. To achieve this, the setpoint is raised in time (never lowered). Up to 4 appointments per type and profile are possible, also several on the same day. All appointments can be changed later in the blueprint.\n\nEntered so far:\n{liste}",
+        "data": {
+          "art": "Type",
+          "profil": "Applies in heating profile",
+          "tage": "Weekdays",
+          "zeit": "Time at which the temperature should be reached",
+          "temp": "Temperature",
+          "weiterer": "Enter another appointment afterwards",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "klima_sender": {
+        "title": "Air conditioner in room {raum} – IR transmitter",
+        "description": "Choose the IR transmitter **of this room** (e.g. the Broadlink in the living room or the one in the bedroom). PV surplus heating automatically uses the same transmitter.\n\n{grund}\n\nOn the next page the integration reads which commands the previous control sent via this transmitter and which are already learned there, and pre-fills everything. Nothing is sent and nothing is learned in the process.\n\n{fehler}",
+        "data": {
+          "klima_sender": "IR transmitter (remote entity)",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "klima": {
+        "title": "Air conditioner in room {raum} – IR commands",
+        "description": "IR transmitter `{sender}`. **Detected:**\n{erkennung}\n\nThe fields are pre-filled accordingly – usually just check and continue. {stufe} in the command name stands for the temperature (power_{stufe} → power_20), {luefter} for the fan level. Several additional commands are separated by commas and sent one after another, 1 s apart. Missing commands are learned with you in the next step; existing ones are never replaced without your explicit consent.",
+        "data": {
+          "ir_geraet": "Device name of the IR commands in this transmitter",
+          "ir_pruefen": "Check commands individually anyway (send as a test or learn again)",
+          "befehl_kuehlen": "Command name for cooling",
+          "befehl_zusatz": "Additional commands after cooling (optional, comma-separated)",
+          "befehl_aus": "Command name for off",
+          "stufe_min": "Lowest cooling temperature",
+          "stufe_max": "Highest cooling temperature",
+          "luefter": "Fan level (optional)",
+          "klima_fenster": "Window contacts that pause the air conditioner (optional)",
+          "befehl_heizen": "Command name for heating (complete state; used by PV surplus heating of this room)",
+          "befehl_heizen_aus": "Command name for heating off",
+          "klima_steckdose": "Smart plug of the air conditioner (optional)",
+          "klima_leistung": "Power measurement of the air conditioner (optional)",
+          "laeuft_ab_w": "Air conditioner counts as running from",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "luefter": "For example auto, low or high – only needed if the command names contain a fan level.",
+          "klima_steckdose": "Switchable smart plug with power metering in front of the air conditioner. It stays switched on permanently: before every IR command it is switched on if necessary, and switched on again after being switched off by mistake – it is never switched off.",
+          "klima_leistung": "Leave empty: the power sensor of the same plug is used automatically. The control uses it to check whether the air conditioner executed a command – otherwise it repeats once, then notifies.",
+          "laeuft_ab_w": "Above the standby consumption (usually 1–3 W) and below the power of the fan alone.",
+          "ir_geraet": "The transmitter stores this room's commands under this name (parameter “device”), e.g. klima.",
+          "befehl_zusatz": "For example eco_{stufe} or eco_{stufe}, display_off – exactly as the previous control sent it.",
+          "ir_pruefen": "Without the tick, the flow continues directly if all commands exist. Missing commands always lead to learning.",
+          "befehl_heizen": "Leave empty if this room is not heated via the air conditioner.",
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "klima_schalter": {
+        "title": "Air conditioner on a switchable smart plug – {raum}",
+        "description": "The plug only switches the air conditioner on and off; temperature and fan are set by the unit itself. Automatic mode: on when the room is warmer than the target temperature plus the switch-on offset, off when it is cooler than the target minus the switch-off offset (example: target 22 °C, +0.5 / −0.0 → on above 22.5 °C, off below 22.0 °C). “Manuell” on the card = continuous operation. Everything can be changed later in the automation “Klima {raum}”.",
+        "data": {
+          "klima_schalter": "Switchable smart plug of the air conditioner",
+          "klima_ziel_start": "Target temperature (initial value)",
+          "ein_ueber": "Switch on when warmer than target plus",
+          "aus_unter": "Switch off when cooler than target minus",
+          "kuehl_profile": "Cooling allowed in the heating profiles",
+          "anwesenheit": "Only cool when someone is present (person or switch, optional)",
+          "abwesend_aus": "When leaving, also set the air conditioning mode to Aus",
+          "klima_fenster": "Window contacts that pause the air conditioner (optional)",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "kuehl_profile": "Default Sommer and Aus – so the air conditioner does not cool while the heating is heating.",
+          "abwesend_aus": "After returning, the air conditioner is switched on again deliberately.",
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "pv": {
+        "title": "PV surplus heating",
+        "description": "Sequence: start on surplus with a full battery, close the radiators, the air conditioner heats, heat check, pauses and safety release. All thresholds can be adjusted later in the blueprint.\n\n**Heating commands:** They are sent via the air conditioner's Broadlink (device name `{geraet}`). With {stufe} in the command name there is one command per heating level, e.g. `heizen_22` … `heizen_28`; PV heating sends the selected heating level, which can be changed later without learning again. “Check now” leads directly to learning the missing commands on exactly this Broadlink – each one is then sent once as a test.\n\n{uebernahme}\n\n{heiz_stand}\n\n{fehler}",
+        "data": {
+          "pv_sender": "Broadlink of the air conditioner (also sends the heating commands)",
+          "befehl_heizen": "Command name for heating",
+          "heiz_stufe_min": "Heating levels from",
+          "heiz_stufe_max": "Heating levels to",
+          "pv_heizstufe": "Heating level for PV heating",
+          "befehl_heizen_aus": "Command name for heating off",
+          "heiz_anlernen": "Heating commands",
+          "pv_raumfuehler": "Room temperature sensor",
+          "pv_trvs": "Radiator thermostats of the room (closed before PV heating)",
+          "pv_ventile": "Valve position sensors (optional)",
+          "pv_fenster": "Windows that block PV heating (optional)",
+          "soc": "Battery state of charge",
+          "netz": "Grid export (positive = export)",
+          "akku_leistung": "Battery power (positive = charging)",
+          "pv_leistung": "PV power",
+          "verbrauch": "House consumption",
+          "zeitstempel_attribut": "Timestamp attribute of the energy data (optional)",
+          "start_leistung": "Start from grid export",
+          "soc_start": "Start from battery state of charge",
+          "soc_halten": "Keep heating from battery state of charge",
+          "pv_ziel": "PV target temperature",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "funktionen": {
+        "title": "Room {raum} – functions",
+        "description": "Newly selected functions only ask for their own settings afterwards; deselected functions are removed together with their helpers. What you changed in the automations yourself (devices, times, temperatures) is kept. The room cards are renewed in place. The type of heating times (day schedules or weekly schedule) cannot be switched here.",
+        "data": {
+          "profile": "Heating profiles (always included as well: Sommer and Aus)",
+          "sommer_heizen": "Heat at times in the Sommer profile (otherwise frost protection)",
+          "zeitquelle": "Heating times",
+          "fenster_modus": "Window monitoring",
+          "boost": "Heating boost",
+          "vorheizen": "Predictive pre-heating before heating starts",
+          "mindest": "Reach a minimum temperature at fixed times",
+          "zieltermin": "Reach a target temperature at fixed times",
+          "klima": "Air conditioning automation",
+          "klima_art": "Type of air conditioner",
+          "pv": "PV surplus heating via the air conditioner",
+          "karte": "Create and place a dashboard card",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "alte_karten": {
+        "title": "Previous dashboard cards – {raum}",
+        "description": "These {anzahl} cards belong to this room's previous control (they use its scripts, automations or helpers). After the switch-over their buttons no longer work. Ticked cards are removed – especially in nested dashboards this is easier here than in the dashboard editor. Every affected dashboard is backed up first; “Switch the previous control on again” puts the cards back in place. Cards that only show the thermostat and summary cards with other rooms do not appear here.",
+        "data": {
+          "karten": "Remove these previous cards",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      },
+      "steckdose": {
+        "title": "Air conditioner smart plug – {raum}",
+        "description": "Switchable smart plug with power metering in front of the air conditioner. It stays **switched on permanently**: before every IR command it is switched on if necessary (followed by a short start-up delay), and switched on again 1 minute after being switched off by mistake – it is never switched off. With power metering, the control checks whether the air conditioner executed a command: otherwise it repeats once, then shows a persistent notification.\n\nIt is entered in {automationen}. **Leave the plug empty = remove.** Check times and “keep switched on permanently” are then found in these automations in the section “Stromversorgung und Rückmeldung” (power supply and feedback).",
+        "data": {
+          "klima_steckdose": "Smart plug of the air conditioner",
+          "klima_leistung": "Power measurement of the air conditioner",
+          "laeuft_ab_w": "Air conditioner counts as running from"
+        },
+        "data_description": {
+          "klima_leistung": "Leave empty: the power sensor of the same plug is used automatically.",
+          "laeuft_ab_w": "Above the standby consumption (usually 1–3 W) and below the power of the fan alone."
+        }
+      },
+      "geraet": {
+        "title": "{raum} – replace a device",
+        "description": "Which device should be replaced? Listed are all devices used by this room's automations and its Better Thermostat (radiator thermostats, sensors, window contacts, smart plug, Broadlink …).",
+        "data": {
+          "alt": "Old device"
+        }
+      },
+      "geraet_neu": {
+        "title": "New device",
+        "description": "Replaces **{alt}** everywhere in this room (used in: {verwendet}) – in the automations and, if it is entered there, in Better Thermostat (sensors and radiator thermostats; calibration and settings are kept). A radiator thermostat of a different device integration (e.g. Zigbee instead of Homematic IP) is better replaced in Better Thermostat itself – you will be told if that is the case. If the Better Thermostat itself is replaced, the new one gets the same window sensor.{andere}",
+        "data": {
+          "neu": "New device",
+          "alle_raeume": "Also replace in all other rooms that use this device"
+        },
+        "data_description": {
+          "alle_raeume": "For example the energy sensors of the PV system or the outdoor sensor that every room uses."
+        }
+      },
+      "aendern_bestaetigen": {
+        "title": "Room {raum} – change functions",
+        "description": "{aenderungen}\n\nRoom cards that will be renewed: {karten}\n\nThe dashboards are backed up first. If something fails, the previous state is restored. Automations and helpers that are no longer needed are deleted last.",
+        "data": {
+          "bestaetigt": "Yes, change now",
+          "zurueck": "↩ Back to the previous step"
+        },
+        "data_description": {
+          "zurueck": "Switch on and click OK: the previous page appears again with your entries. Entries made on this page are not kept."
+        }
+      }
+    },
+    "error": {
+      "kein_profil": "Please select at least one heating profile.",
+      "pflichtfeld": "Please select the required devices or sensors – or choose “Back to the previous step” below.",
+      "pv_braucht_klima": "PV surplus heating requires the air conditioning automation of this room.",
+      "heizstufe_bereich": "The heating level for PV heating must be between “Heating levels from” and “Heating levels to”.",
+      "pv_braucht_ir": "PV surplus heating requires an air conditioner with an IR transmitter (a smart plug cannot switch it to heating).",
+      "zeit_gleich": "Start and end of a heating period must not be the same.",
+      "absenk_hoeher": "The setback temperature must not be higher than the target temperature.",
+      "kein_tag": "Please select at least one weekday.",
+      "zu_viele": "All appointments of this type are already used for this profile (at most 4, in the summer profile 2).",
+      "stufen": "The lowest level must not be higher than the highest level.",
+      "sender_nicht_bereit": "The IR transmitter is not switched on or not reachable (state: {fehler}).",
+      "senden_fehlgeschlagen": "The command could not be sent: {fehler}",
+      "lernen_fehlgeschlagen": "Learning failed: {fehler}",
+      "ueberschreiben": "At least one selected command already exists in the transmitter. To replace it, tick the box – or deselect the command.",
+      "nicht_bestaetigt": "Please confirm the creation.",
+      "kein_dashboard": "Please select at least one dashboard.",
+      "bt_belegt": "This Better Thermostat is already controlled by room “{belegt}” of this integration. Please remove that room first.",
+      "alt_pv_laeuft": "Nothing was created and nothing was changed: {fehler}",
+      "anlegen_fehlgeschlagen": "Creation failed – everything created so far has been removed again. Cause: {fehler}"
+    },
+    "abort": {
+      "already_configured": "This room is already configured.",
+      "keine_ansicht": "This dashboard has no view.",
+      "vorschau_fehlgeschlagen": "Home Assistant could not be read: {fehler}",
+      "funktionen_fertig": "Functions changed:\n{liste}\n\nErrors while cleaning up: {fehler}",
+      "aendern_fehlgeschlagen": "Functions not changed – the previous state has been restored. Cause: {fehler}",
+      "nichts_geaendert": "No function was changed – nothing to do.",
+      "alte_karten_fertig": "Removed (dashboards backed up beforehand):\n{liste}\n\nNot removed: {fehler}",
+      "keine_alten_karten": "No cards of this room's previous control were found in the dashboards.",
+      "keine_auswahl": "No card selected – nothing removed.",
+      "geraet_fertig": "{alt} was replaced by {neu} in:\n{liste}{hinweis}",
+      "keine_klima": "No air conditioning automation is set up for this room.",
+      "ir_fertig": "IR learning finished. Learned commands: {anzahl}.{freigabe}",
+      "keine_klima_ir": "No air conditioner with an IR transmitter is set up for this room. For an air conditioner on a switchable smart plug, the plug itself is the actuator (automation “Klima <room>”).",
+      "steckdose_fertig": "{stand}\n\nChanged automations:\n{liste}",
+      "steckdose_fehlgeschlagen": "The air conditioner's smart plug was not changed: {fehler}",
+      "karte_fertig": "The room card was placed again (number of dashboards: {anzahl}).",
+      "alt_zurueck_fertig": "The previous control is switched on again, the new control of this room is paused. Messages: {fehler}",
+      "alt_neu_fertig": "The new control is active again, the previous control has been switched off and marked again.",
+      "alt_geloescht": "The previous control was deleted. Backup: {datei}. Messages: {fehler}"
+    }
+  }
+}

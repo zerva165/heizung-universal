@@ -1,0 +1,1616 @@
+# PV-Überschussheizen – Blueprint 3 von 3 (optional)
+# Erzeugt mit tools/build_pv.py
+blueprint:
+  name: "PV-Überschussheizen (Raum)"
+  description: |-
+    Paketversion 1.6.0 · Optionale Ergänzung für Räume mit Klimaanlage: Bei PV-Überschuss und voller Batterie heizt die Klimaanlage (IR-Vollzustand) statt der Zentralheizung. Ablauf: Startbedingungen 5 min bestätigen → Heizkörper über die Raumheizungssteuerung schließen und Ventile prüfen → Klimaanlage heizen → Wärmeprüfung mit einer IR-Wiederholung → Temperaturpause → Ende bei Energiemangel, Kälte/Wärme, Fenster, Profil oder Fehler. Sicherheitsprinzip: Die Heizkörperpause gilt nur, solange diese Automation ihre befristete Freigabe alle 30 s erneuert. Fällt sie aus, übernimmt die Raumheizung automatisch, und die Klimaautomatik schaltet die Klimaanlage ab.
+
+    Voraussetzungen im selben Raum: „Universelle Raumheizungssteuerung“ (mit PV-Zusammenarbeit) und „Klimaautomatik“ (mit PV-Zusammenarbeit).
+
+    Optional mit schaltbarer Messsteckdose: Strom vor jedem IR-Befehl gesichert, IR-Wiederholung nach der Leistung statt nach dem Temperaturanstieg, Rückmeldung nach HEIZEN-AUS.
+  domain: "automation"
+  author: "HA-Heizung-Universal"
+  homeassistant:
+    min_version: "2026.11.0"
+  input:
+    geraete:
+      name: "Raum und Geräte"
+      icon: "mdi:home-lightning-bolt"
+      input:
+        raum_name:
+          name: "Raumname"
+          default: "Raum"
+          selector:
+            text: {}
+        raum_schluessel:
+          name: "Raumkennung"
+          default: "raum"
+          selector:
+            text: {}
+        better_thermostat:
+          name: "Better Thermostat des Raums"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "climate"
+                  integration: "better_thermostat"
+              multiple: false
+        heizkoerper:
+          name: "Heizkörperthermostate"
+          description: "Alle Heizkörperthermostate des Raums. Vor dem PV-Heizen müssen alle auf Frostschutz (≤ 5 °C) stehen."
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain:
+                    - "climate"
+        ventile:
+          name: "Ventilöffnungs-Sensoren (optional)"
+          default: []
+          description: "Wenn vorhanden: alle müssen 0 % melden, bevor die Klimaanlage heizt."
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain:
+                    - "sensor"
+        raumfuehler:
+          name: "Raumtemperaturfühler"
+          description: "Physischer Fühler (sein Meldezeitpunkt wird auf Aktualität geprüft)."
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "sensor"
+                  device_class:
+                    - "temperature"
+              multiple: false
+        aussentemperatur:
+          name: "Außentemperatur"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "sensor"
+                  device_class:
+                    - "temperature"
+              multiple: false
+        fensterkontakte:
+          name: "Fenster, die PV-Heizen sperren"
+          default: []
+          description: "Vom Assistenten: der Fensterstatus des Raums (ohne die dort eingetragenen Ausnahmen)."
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain:
+                    - "binary_sensor"
+                  device_class:
+                    - "window"
+                    - "door"
+                    - "opening"
+                - domain:
+                    - "input_boolean"
+        ir_konfiguration:
+          name: "Gemeinsame IR-Konfiguration der Klimaautomatik (input_text)"
+          description: "Derselbe Helfer wie in der Klimaautomatik dieses Raums. Von dort kommen IR-Sender, Gerätename und die Heizbefehle – hier wird kein eigener Sender gewählt, damit es nur eine Broadlink-Zuordnung je Raum gibt."
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_text"
+              multiple: false
+        heizstufe:
+          name: "Heizstufe der Klimaanlage beim PV-Heizen"
+          default: 24
+          description: "Ersetzt `{stufe}` im Heizbefehl der Klimaautomatik (z. B. `heizen_{stufe}` → `heizen_24`). Für jede hier gewählte Stufe muss der Befehl im Sender angelernt sein. Ohne `{stufe}` im Befehlsnamen wirkt diese Einstellung nicht."
+          selector:
+            number:
+              min: 16
+              max: 30
+              step: 1
+              mode: "box"
+              unit_of_measurement: "°C"
+    strom:
+      name: "Stromversorgung und Rückmeldung (optional)"
+      icon: "mdi:power-socket-de"
+      collapsed: true
+      description: "Dieselbe Messsteckdose wie in der Klimaautomatik. Vor jedem IR-Befehl wird sie bei Bedarf eingeschaltet (nie ausgeschaltet). Mit Leistungsmessung entscheidet die IR-Wiederholung nach der Leistung statt nach dem Temperaturanstieg; reagiert die Klimaanlage auch auf die Wiederholung nicht, wird PV mit IR-Fehler beendet. Läuft sie nach HEIZEN-AUS weiter, wird AUS einmal wiederholt."
+      input:
+        klima_steckdose:
+          name: "Steckdose der Klimaanlage (optional)"
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "switch"
+              multiple: false
+        vorlauf_s:
+          name: "Wartezeit nach dem Einschalten der Steckdose"
+          default: 30
+          selector:
+            number:
+              min: 5
+              max: 120
+              step: 5
+              mode: "box"
+              unit_of_measurement: "s"
+        klima_leistung:
+          name: "Leistungsmessung der Klimaanlage (optional)"
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "sensor"
+                  device_class:
+                    - "power"
+              multiple: false
+        laeuft_ab_w:
+          name: "Klimaanlage gilt als laufend ab"
+          default: 15
+          selector:
+            number:
+              min: 2
+              max: 500
+              step: 1
+              mode: "box"
+              unit_of_measurement: "W"
+        pruef_aus_min:
+          name: "Rückmeldung nach HEIZEN-AUS prüfen nach"
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 60
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+    energie:
+      name: "Energiedaten"
+      icon: "mdi:solar-power"
+      collapsed: true
+      input:
+        soc:
+          name: "Batterie-Ladestand (%)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "sensor"
+              multiple: false
+        netz:
+          name: "Netz-Einspeisung (W, positiv = Einspeisung, negativ = Bezug)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "sensor"
+              multiple: false
+        akku_leistung:
+          name: "Batterie-Leistung (W, positiv = Laden, negativ = Entladen)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "sensor"
+              multiple: false
+        pv_leistung:
+          name: "PV-Leistung (W)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "sensor"
+              multiple: false
+        verbrauch:
+          name: "Hausverbrauch (W)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "sensor"
+              multiple: false
+        zeitstempel_attribut:
+          name: "Attribut mit Zeitpunkt der letzten Aktualisierung (optional)"
+          default: ""
+          description: "Z. B. `last_update`. Leer = Meldezeitpunkt (last_reported) der Sensoren verwenden."
+          selector:
+            text: {}
+        max_energie_alter:
+          name: "Energiedaten höchstens so alt"
+          default: 180
+          selector:
+            number:
+              min: 30
+              max: 1800
+              step: 10
+              mode: "slider"
+              unit_of_measurement: "s"
+        max_raum_alter:
+          name: "Raumfühler höchstens so alt"
+          default: 120
+          selector:
+            number:
+              min: 10
+              max: 720
+              step: 10
+              mode: "slider"
+              unit_of_measurement: "min"
+        max_aussen_alter:
+          name: "Außentemperatur höchstens so alt"
+          default: 180
+          selector:
+            number:
+              min: 10
+              max: 1440
+              step: 10
+              mode: "slider"
+              unit_of_measurement: "min"
+    schwellen:
+      name: "Start- und Stoppschwellen"
+      icon: "mdi:tune"
+      collapsed: true
+      description: "Standardwerte = bewährte Ausgangswerte."
+      input:
+        start_leistung:
+          name: "Start: Einspeisung mindestens"
+          default: 1000
+          selector:
+            number:
+              min: 500
+              max: 3000
+              step: 50
+              mode: "slider"
+              unit_of_measurement: "W"
+        soc_start:
+          name: "Start: Batterie mindestens"
+          default: 95
+          selector:
+            number:
+              min: 50
+              max: 100
+              step: 1
+              mode: "slider"
+              unit_of_measurement: "%"
+        soc_halten:
+          name: "Weiterheizen: Batterie mindestens"
+          default: 85
+          selector:
+            number:
+              min: 20
+              max: 100
+              step: 1
+              mode: "slider"
+              unit_of_measurement: "%"
+        akku_entladung_max:
+          name: "Start: Batterie-Entladung höchstens"
+          default: 100
+          selector:
+            number:
+              min: 0
+              max: 2000
+              step: 10
+              mode: "slider"
+              unit_of_measurement: "W"
+        aussen_start:
+          name: "Start: Außentemperatur unter"
+          default: 18
+          selector:
+            number:
+              min: -10
+              max: 30
+              step: 0.5
+              mode: "slider"
+              unit_of_measurement: "°C"
+        aussen_ende:
+          name: "Ende: Außentemperatur ab"
+          default: 19
+          selector:
+            number:
+              min: -10
+              max: 30
+              step: 0.5
+              mode: "slider"
+              unit_of_measurement: "°C"
+        netzbezug_max:
+          name: "Ende: Netzbezug über (länger als Toleranz)"
+          default: 300
+          selector:
+            number:
+              min: 0
+              max: 3000
+              step: 50
+              mode: "slider"
+              unit_of_measurement: "W"
+        pv_ziel:
+          name: "Zieltemperatur PV-Heizen (Klima aus ab)"
+          default: 24
+          selector:
+            number:
+              min: 18
+              max: 28
+              step: 0.5
+              mode: "slider"
+              unit_of_measurement: "°C"
+        einschalt_abstand:
+          name: "Wieder einschalten ab Ziel minus"
+          default: 0.7
+          selector:
+            number:
+              min: 0.1
+              max: 3
+              step: 0.1
+              mode: "slider"
+              unit_of_measurement: "K"
+        anstieg_min:
+          name: "Wärmeprüfung: Mindestanstieg"
+          default: 0.2
+          selector:
+            number:
+              min: 0.1
+              max: 1
+              step: 0.1
+              mode: "slider"
+              unit_of_measurement: "K"
+    fristen:
+      name: "Fristen"
+      icon: "mdi:timer-cog"
+      collapsed: true
+      input:
+        start_bestaetigung:
+          name: "Startbestätigung"
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 120
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+        mangel_minuten:
+          name: "Energiemangel-Toleranz"
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 120
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+        wiederholung_minuten:
+          name: "IR-Wiederholung"
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 120
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+        pruef_minuten:
+          name: "Wärmeprüfung"
+          default: 40
+          selector:
+            number:
+              min: 1
+              max: 120
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+        sperre_minuten:
+          name: "Wiederanlaufsperre"
+          default: 30
+          selector:
+            number:
+              min: 1
+              max: 120
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+        freigabe_minuten:
+          name: "Sicherheitsfreigabe (Lease)"
+          default: 2
+          selector:
+            number:
+              min: 1
+              max: 120
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+        schaltpause_minuten:
+          name: "Schaltpause nach AUS"
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 120
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+        heizkoerper_minuten:
+          name: "Heizkörper-Schließfrist"
+          default: 8
+          selector:
+            number:
+              min: 1
+              max: 120
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+    kopplung:
+      name: "Zusammenarbeit mit Raumheizung und Klimaautomatik"
+      icon: "mdi:link-variant"
+      collapsed: true
+      input:
+        heizprofil:
+          name: "Heizprofil-Auswahl der Raumheizung"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_select"
+              multiple: false
+        pv_profile:
+          name: "PV-Heizen erlaubt in den Profilen"
+          default:
+            - "Komfort"
+            - "Übergang"
+            - "Urlaub"
+          selector:
+            select:
+              multiple: true
+              mode: "list"
+              options:
+                - "Komfort"
+                - "Übergang"
+                - "Urlaub"
+                - "Sommer"
+                - "Aus"
+        raumheizung_automation:
+          name: "Raumheizungssteuerung-Automation dieses Raums"
+          description: "Muss eingeschaltet sein (übernimmt die Heizkörper)."
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "automation"
+              multiple: false
+        klima_automation:
+          name: "Klimaautomatik-Automation dieses Raums"
+          description: "Muss eingeschaltet sein (Notrückgabe bei Ausfall)."
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "automation"
+              multiple: false
+        klima_modus:
+          name: "Klima-Modus der Klimaautomatik"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_select"
+              multiple: false
+        klima_aktiv:
+          name: "Kühlbefehl aktiv der Klimaautomatik"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+    helfer:
+      name: "PV-Helfer"
+      icon: "mdi:tune-variant"
+      collapsed: true
+      description: "Legt der Einrichtungsassistent an (8 Timer, 8 Schalter, 1 Zahl, 1 Text)."
+      input:
+        t_startfrist:
+          name: "Startbestätigung"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "timer"
+              multiple: false
+        t_mangelfrist:
+          name: "Energiemangel-Toleranz"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "timer"
+              multiple: false
+        t_wiederholung:
+          name: "IR-Wiederholung"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "timer"
+              multiple: false
+        t_waermepruefung:
+          name: "Wärmeprüfung"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "timer"
+              multiple: false
+        t_sperre:
+          name: "Wiederanlaufsperre"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "timer"
+              multiple: false
+        t_freigabe:
+          name: "Sicherheitsfreigabe (Lease)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "timer"
+              multiple: false
+        t_schaltpause:
+          name: "Schaltpause nach AUS"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "timer"
+              multiple: false
+        t_heizkoerper:
+          name: "Heizkörper-Schließfrist"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "timer"
+              multiple: false
+        f_heizfreigabe:
+          name: "PV-Heizfreigabe (Schalter für den Benutzer)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+        f_ir_geprueft:
+          name: "IR-Befehle vor Ort geprüft (Freigabe nach Test)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+        f_regelung:
+          name: "Regelung aktiv (PV verantwortlich)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+        f_heizbefehl:
+          name: "Heizbefehl aktiv"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+        f_auftrag:
+          name: "IR-Auftrag offen"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+        f_fehler:
+          name: "IR-Fehler (quittierungspflichtig)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+        f_wiederholt:
+          name: "IR wiederholt"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+        f_vorbereitung:
+          name: "Startvorbereitung"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+        starttemperatur:
+          name: "Starttemperatur für die Wärmeprüfung (input_number −20…50)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_number"
+              multiple: false
+        status_text:
+          name: "PV-Status-Text (input_text)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_text"
+              multiple: false
+mode: "queued"
+max: 20
+max_exceeded: "warning"
+trace:
+  stored_traces: 20
+trigger_variables:
+  pruef_aus_tv: !input pruef_aus_min
+variables:
+  raum_name: !input raum_name
+  raum_schluessel: !input raum_schluessel
+  heizkoerper: !input heizkoerper
+  ventile: !input ventile
+  raumfuehler: !input raumfuehler
+  fensterkontakte: !input fensterkontakte
+  ir_konfiguration: !input ir_konfiguration
+  soc: !input soc
+  netz: !input netz
+  akku_leistung: !input akku_leistung
+  pv_leistung: !input pv_leistung
+  verbrauch: !input verbrauch
+  zeitstempel_attribut: !input zeitstempel_attribut
+  max_energie_alter: !input max_energie_alter
+  max_raum_alter: !input max_raum_alter
+  max_aussen_alter: !input max_aussen_alter
+  start_leistung: !input start_leistung
+  soc_start: !input soc_start
+  soc_halten: !input soc_halten
+  akku_entladung_max: !input akku_entladung_max
+  aussen_start: !input aussen_start
+  aussen_ende: !input aussen_ende
+  netzbezug_max: !input netzbezug_max
+  pv_ziel: !input pv_ziel
+  einschalt_abstand: !input einschalt_abstand
+  anstieg_min: !input anstieg_min
+  heizprofil: !input heizprofil
+  pv_profile: !input pv_profile
+  raumheizung_automation: !input raumheizung_automation
+  klima_automation: !input klima_automation
+  klima_modus: !input klima_modus
+  klima_aktiv: !input klima_aktiv
+  starttemperatur: !input starttemperatur
+  status_text: !input status_text
+  heizstufe: !input heizstufe
+  klima_steckdose: !input klima_steckdose
+  vorlauf_s: !input vorlauf_s
+  klima_leistung: !input klima_leistung
+  laeuft_ab_w: !input laeuft_ab_w
+  pruef_aus_min: !input pruef_aus_min
+  start_bestaetigung: !input start_bestaetigung
+  mangel_minuten: !input mangel_minuten
+  wiederholung_minuten: !input wiederholung_minuten
+  pruef_minuten: !input pruef_minuten
+  sperre_minuten: !input sperre_minuten
+  freigabe_minuten: !input freigabe_minuten
+  schaltpause_minuten: !input schaltpause_minuten
+  heizkoerper_minuten: !input heizkoerper_minuten
+  t_startfrist: !input t_startfrist
+  t_mangelfrist: !input t_mangelfrist
+  t_wiederholung: !input t_wiederholung
+  t_waermepruefung: !input t_waermepruefung
+  t_sperre: !input t_sperre
+  t_freigabe: !input t_freigabe
+  t_schaltpause: !input t_schaltpause
+  t_heizkoerper: !input t_heizkoerper
+  f_heizfreigabe: !input f_heizfreigabe
+  f_ir_geprueft: !input f_ir_geprueft
+  f_regelung: !input f_regelung
+  f_heizbefehl: !input f_heizbefehl
+  f_auftrag: !input f_auftrag
+  f_fehler: !input f_fehler
+  f_wiederholt: !input f_wiederholt
+  f_vorbereitung: !input f_vorbereitung
+  bt: !input better_thermostat
+  aussen: !input aussentemperatur
+  steckdose_ok: "{{ klima_steckdose is string and klima_steckdose != '' }}"
+  leistung_ok: "{{ klima_leistung is string and klima_leistung != '' }}"
+  ir_cfg: "{%- set d = namespace(s='', g='', h='', ha='') -%}{%- for teil in (states(ir_konfiguration) if ir_konfiguration is string and ir_konfiguration != '' else '').split('|') -%}{%- set kv = teil.split('=', 1) -%}{%- if kv | count == 2 -%}{%- if kv[0] == 's' -%}{%- set d.s = kv[1] -%}{%- elif kv[0] == 'g' -%}{%- set d.g = kv[1] -%}{%- elif kv[0] == 'h' -%}{%- set d.h = kv[1] -%}{%- elif kv[0] == 'ha' -%}{%- set d.ha = kv[1] -%}{%- endif -%}{%- endif -%}{%- endfor -%}{{ {'s': d.s, 'g': d.g, 'h': d.h, 'ha': d.ha} }}"
+  klima_sender: "{{ ir_cfg.s }}"
+  ir_geraet: "{{ ir_cfg.g }}"
+  befehl_heizen: "{{ ir_cfg.h | replace('{stufe}', (heizstufe | int) | string) }}"
+  befehl_heizen_aus: "{{ ir_cfg.ha | replace('{stufe}', (heizstufe | int) | string) }}"
+triggers:
+  - alias: "Energie-, Raum- oder Schutzdaten geändert"
+    trigger: "state"
+    entity_id: !input soc
+    id: "daten"
+  - alias: "Netzleistung geändert"
+    trigger: "state"
+    entity_id: !input netz
+    id: "daten"
+  - alias: "Batterieleistung geändert"
+    trigger: "state"
+    entity_id: !input akku_leistung
+    id: "daten"
+  - alias: "PV-Leistung geändert"
+    trigger: "state"
+    entity_id: !input pv_leistung
+    id: "daten"
+  - alias: "Hausverbrauch geändert"
+    trigger: "state"
+    entity_id: !input verbrauch
+    id: "daten"
+  - alias: "Raum- oder Außentemperatur geändert"
+    trigger: "state"
+    entity_id: !input raumfuehler
+    id: "daten"
+  - alias: "Außentemperatur geändert"
+    trigger: "state"
+    entity_id: !input aussentemperatur
+    id: "daten"
+  - alias: "Better Thermostat geändert"
+    trigger: "state"
+    entity_id: !input better_thermostat
+    id: "daten"
+  - alias: "Heizkörperthermostat geändert"
+    trigger: "state"
+    entity_id: !input heizkoerper
+    id: "daten"
+  - alias: "Ventilöffnung geändert"
+    trigger: "state"
+    entity_id: !input ventile
+    id: "daten"
+  - alias: "Fenster geändert"
+    trigger: "state"
+    entity_id: !input fensterkontakte
+    id: "daten"
+  - alias: "Heizprofil oder Klimabedienung geändert"
+    trigger: "state"
+    entity_id: !input heizprofil
+    id: "daten"
+  - alias: "Klima-Modus geändert"
+    trigger: "state"
+    entity_id: !input klima_modus
+    id: "daten"
+  - alias: "Kühlbefehl der Klimaautomatik geändert"
+    trigger: "state"
+    entity_id: !input klima_aktiv
+    id: "daten"
+  - alias: "PV-Heizfreigabe geändert"
+    trigger: "state"
+    entity_id: !input f_heizfreigabe
+    id: "daten"
+  - alias: "IR-Prüffreigabe geändert"
+    trigger: "state"
+    entity_id: !input f_ir_geprueft
+    id: "daten"
+  - alias: "IR-Fehler quittiert oder gesetzt"
+    trigger: "state"
+    entity_id: !input f_fehler
+    id: "daten"
+  - alias: "Startvorbereitung geändert"
+    trigger: "state"
+    entity_id: !input f_vorbereitung
+    id: "daten"
+  - alias: "Raumheizung oder Klimaautomatik ein-/ausgeschaltet"
+    trigger: "state"
+    entity_id: !input raumheizung_automation
+    id: "daten"
+  - alias: "Klimaautomatik ein-/ausgeschaltet"
+    trigger: "state"
+    entity_id: !input klima_automation
+    id: "daten"
+  - alias: "Frist abgelaufen: Startbestätigung"
+    trigger: "event"
+    event_type: "timer.finished"
+    event_data:
+      entity_id: !input t_startfrist
+    id: "timer"
+  - alias: "Frist abgelaufen: Energiemangel-Toleranz"
+    trigger: "event"
+    event_type: "timer.finished"
+    event_data:
+      entity_id: !input t_mangelfrist
+    id: "timer"
+  - alias: "Frist abgelaufen: IR-Wiederholung"
+    trigger: "event"
+    event_type: "timer.finished"
+    event_data:
+      entity_id: !input t_wiederholung
+    id: "timer"
+  - alias: "Frist abgelaufen: Wärmeprüfung"
+    trigger: "event"
+    event_type: "timer.finished"
+    event_data:
+      entity_id: !input t_waermepruefung
+    id: "timer"
+  - alias: "Frist abgelaufen: Wiederanlaufsperre"
+    trigger: "event"
+    event_type: "timer.finished"
+    event_data:
+      entity_id: !input t_sperre
+    id: "timer"
+  - alias: "Frist abgelaufen: Sicherheitsfreigabe (Lease)"
+    trigger: "event"
+    event_type: "timer.finished"
+    event_data:
+      entity_id: !input t_freigabe
+    id: "timer"
+  - alias: "Frist abgelaufen: Schaltpause nach AUS"
+    trigger: "event"
+    event_type: "timer.finished"
+    event_data:
+      entity_id: !input t_schaltpause
+    id: "timer"
+  - alias: "Frist abgelaufen: Heizkörper-Schließfrist"
+    trigger: "event"
+    event_type: "timer.finished"
+    event_data:
+      entity_id: !input t_heizkoerper
+    id: "timer"
+  - alias: "Alle 30 s: stillstehende Daten prüfen und befristete Freigabe erneuern"
+    trigger: "time_pattern"
+    seconds: "/30"
+    id: "sicherheit"
+  - alias: "Nach dem Neustart PV nicht blind fortsetzen"
+    trigger: "homeassistant"
+    event: "start"
+    id: "boot"
+  - alias: "Rückmeldung: Heizbefehl seit der Prüfzeit zurückgenommen"
+    trigger: "state"
+    entity_id: !input f_heizbefehl
+    to: "off"
+    for:
+      minutes: !input pruef_aus_min
+    id: "aus_pruefung"
+  - alias: "Rückmeldung: Heizbefehl seit der doppelten Prüfzeit zurückgenommen (nach der Wiederholung)"
+    trigger: "state"
+    entity_id: !input f_heizbefehl
+    to: "off"
+    for: "{{ '%02d:%02d:00' % ((pruef_aus_tv | int * 2) // 60, (pruef_aus_tv | int * 2) % 60) }}"
+    id: "aus_pruefung2"
+conditions:
+  - alias: "Nur Ablauf-Ereignisse der eigenen Timer auswerten"
+    condition: "template"
+    value_template: "{{ trigger.id != 'timer' or trigger.event.data.entity_id in [t_startfrist, t_mangelfrist, t_wiederholung, t_waermepruefung, t_sperre, t_freigabe, t_schaltpause, t_heizkoerper] }}"
+actions:
+  - alias: "Rückmeldung nach HEIZEN-AUS prüfen (eigener Lauf, danach Ende)"
+    if:
+      - alias: "Prüfzeit nach HEIZEN-AUS abgelaufen"
+        condition: "template"
+        value_template: "{{ trigger.id in ['aus_pruefung', 'aus_pruefung2'] }}"
+    then:
+      - alias: "Nur wenn die Klimaanlage trotz AUS weiterläuft und niemand anderes sie nutzt"
+        if:
+          - alias: "Leistung über der Laufschwelle, kein Heiz- oder Kühlauftrag"
+            condition: "template"
+            value_template: "{{ leistung_ok and is_number(states(klima_leistung)) and states(klima_leistung) | float >= laeuft_ab_w | float and is_state(f_heizbefehl, 'off') and is_state(f_auftrag, 'off') and is_state(klima_modus, 'Aus') and is_state(klima_aktiv, 'off') and not is_state(f_fehler, 'on') }}"
+        then:
+          - alias: "Erste Prüfung: wiederholen – zweite Prüfung: IR-Fehler"
+            if:
+              - alias: "Erste Prüfung"
+                condition: "template"
+                value_template: "{{ trigger.id == 'aus_pruefung' }}"
+            then:
+              - alias: "Im Logbuch festhalten"
+                action: "logbook.log"
+                data:
+                  name: "{{ raum_name }} PV"
+                  message: "Klimaanlage nimmt {{ pruef_aus_min | int }} min nach HEIZEN-AUS noch {{ states(klima_leistung) }} W auf – AUS wird einmal wiederholt."
+                  entity_id: "{{ f_heizbefehl }}"
+              - alias: "HEIZEN-AUS erneut senden"
+                continue_on_error: true
+                sequence:
+                  - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                    if:
+                      - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                        condition: "template"
+                        value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                    then:
+                      - alias: "Steckdose einschalten"
+                        action: "switch.turn_on"
+                        target:
+                          entity_id: "{{ klima_steckdose }}"
+                        continue_on_error: true
+                      - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                        wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                        timeout:
+                          seconds: 20
+                      - alias: "Nur weiter, wenn die Steckdose eingeschaltet ist"
+                        condition: "template"
+                        value_template: "{{ is_state(klima_steckdose, 'on') }}"
+                      - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                        delay:
+                          seconds: "{{ vorlauf_s | int }}"
+                  - alias: "Gelernten AUS-Zustand erneut senden"
+                    action: "remote.send_command"
+                    target:
+                      entity_id: "{{ klima_sender }}"
+                    data:
+                      device: "{{ ir_geraet }}"
+                      command: "{{ befehl_heizen_aus }}"
+            else:
+              - alias: "IR-Fehler setzen (PV gesperrt bis zur Quittierung)"
+                action: "input_boolean.turn_on"
+                target:
+                  entity_id: "{{ f_fehler }}"
+              - alias: "Dauerhafte Meldung"
+                action: "persistent_notification.create"
+                data:
+                  notification_id: "{{ 'hz_pv_rueckmeldung_' ~ raum_schluessel }}"
+                  title: "{{ raum_name }} PV: Klimaanlage läuft nach HEIZEN-AUS weiter"
+                  message: "HEIZEN-AUS wurde zweimal gesendet, die Klimaanlage nimmt aber weiter {{ states(klima_leistung) }} W auf. PV-Heizen ist gesperrt. Bitte vor Ort prüfen und notfalls mit der Originalfernbedienung ausschalten, danach „IR-Fehler“ ausschalten."
+              - alias: "Sichtbaren PV-Status aktualisieren"
+                action: "input_text.set_value"
+                target:
+                  entity_id: "{{ status_text }}"
+                data:
+                  value: "{{ ('IR-Fehler: Klimaanlage laeuft nach HEIZEN-AUS weiter, vor Ort pruefen')[:255] }}"
+      - alias: "Rückmeldungsprüfung beendet"
+        stop: "Rückmeldung nach HEIZEN-AUS geprüft"
+  - alias: "Aktuelle Eingangsdaten lesen"
+    variables:
+      x: >-
+        {%- set ns = namespace(trv_zu=true, ventile_zu=true, alter_max=-999999, alter_min=999999) -%}
+        {%- for t in heizkoerper -%}{%- if not (states(t) in ['heat', 'off'] and is_number(state_attr(t, 'temperature')) and state_attr(t, 'temperature') | float(99) <= 5) -%}{%- set ns.trv_zu = false -%}{%- endif -%}{%- endfor -%}
+        {%- for v in ventile -%}{%- if not (is_number(states(v)) and states(v) | float(99) == 0) -%}{%- set ns.ventile_zu = false -%}{%- endif -%}{%- endfor -%}
+        {%- for e in [soc, netz, akku_leistung, pv_leistung, verbrauch] -%}
+        {%- set ts = (state_attr(e, zeitstempel_attribut) if zeitstempel_attribut | trim != '' else (states[e].last_reported if states[e] is not none else none)) -%}
+        {%- set alt = (as_timestamp(now()) - as_timestamp(ts, 0)) -%}
+        {%- set ns.alter_max = [ns.alter_max, alt] | max -%}{%- set ns.alter_min = [ns.alter_min, alt] | min -%}
+        {%- endfor -%}
+        {{ dict(preparing=is_state(f_vorbereitung, 'on'), radiator_deadline=states(t_heizkoerper),
+         radiators_closed=(is_state(bt, 'off') and heizkoerper | count > 0 and ns.trv_zu and ns.ventile_zu),
+         soc=(states(soc) | float(none)), grid=(states(netz) | float(none)), battery=(states(akku_leistung) | float(none)),
+         pv=(states(pv_leistung) | float(none)), load=(states(verbrauch) | float(none)), outdoor=(states(aussen) | float(none)),
+         room=(states(raumfuehler) | float(none)), target=(pv_ziel | float), profile=states(heizprofil),
+         room_age=(as_timestamp(now()) - as_timestamp(states[raumfuehler].last_reported, 0) if states[raumfuehler] is not none else 999999),
+         outdoor_age=(as_timestamp(now()) - as_timestamp(states[aussen].last_reported, 0) if states[aussen] is not none else 999999),
+         energy_age=ns.alter_max, energy_min_age=ns.alter_min,
+         armed=is_state(f_heizfreigabe, 'on'), ir_ready=is_state(f_ir_geprueft, 'on'), owner=is_state(f_regelung, 'on'),
+         sent=is_state(f_heizbefehl, 'on'), pending=is_state(f_auftrag, 'on'), fault=is_state(f_fehler, 'on'), retried=is_state(f_wiederholt, 'on'),
+         main_on=(this.state == 'on' if this is defined and this.state is defined else true),
+         watch_on=is_state(klima_automation, 'on'), profile_on=is_state(raumheizung_automation, 'on'),
+         bt_ready=(states(bt) in ['heat', 'off']), remote_ready=(is_state(klima_sender, 'on') and befehl_heizen != '' and befehl_heizen_aus != ''
+           and (not steckdose_ok or states(klima_steckdose) in ['on', 'off'])),
+         leistung_ok=(leistung_ok and is_number(states(klima_leistung))), laeuft=(leistung_ok and states(klima_leistung) | float(0) >= laeuft_ab_w | float),
+         leistung=(states(klima_leistung) if leistung_ok else ''),
+         windows_closed=(fensterkontakte | reject('is_state', 'off') | list | count == 0),
+         cooling_clear=(is_state(klima_modus, 'Aus') and is_state(klima_aktiv, 'off')),
+         start_w=(start_leistung | float), rise=(anstieg_min | float), baseline=(states(starttemperatur) | float(none)),
+         wiederanlaufsperre=states(t_sperre), sicherheitsfreigabe=states(t_freigabe), schaltpause=states(t_schaltpause),
+         waermepruefung=states(t_waermepruefung), ir_wiederholung=states(t_wiederholung),
+         event=(trigger.event.data.entity_id if trigger is defined and trigger.platform == 'event' else ''),
+         boot=(trigger is defined and trigger.id == 'boot'),
+         helpers_ok=([t_startfrist, t_mangelfrist, t_wiederholung, t_waermepruefung, t_sperre, t_freigabe, t_schaltpause, t_heizkoerper,
+           f_heizfreigabe, f_ir_geprueft, f_regelung, f_heizbefehl, f_auftrag, f_fehler, f_wiederholt, f_vorbereitung, starttemperatur, status_text]
+           | select('is_state', ['unknown', 'unavailable']) | list | count == 0)) }}
+  - alias: "Regelungsschritt entscheiden"
+    variables:
+      d: >-
+        {%- set ns = namespace(reason='', op='wait', ir_fault=false) -%}
+        {%- if x.boot -%}{%- set ns.reason = 'Neustart: normale Heizung wiederherstellen' -%}
+        {%- elif not x.armed -%}{%- set ns.reason = 'PV-Heizfreigabe ausgeschaltet' -%}
+        {%- elif not x.ir_ready -%}{%- set ns.reason = 'IR-Prueffreigabe fehlt' -%}
+        {%- elif x.fault -%}{%- set ns.reason = 'IR-Sendefehler: manuell pruefen und quittieren' -%}
+        {%- elif not x.main_on or not x.watch_on or not x.profile_on -%}{%- set ns.reason = 'Regelung oder Sicherheitsautomation deaktiviert' -%}
+        {%- elif not x.helpers_ok -%}{%- set ns.reason = 'PV-Helfer nicht verfuegbar' -%}
+        {%- elif x.profile not in pv_profile -%}{%- set ns.reason = 'Heizprofil erlaubt kein PV-Heizen' -%}
+        {%- elif not x.cooling_clear -%}{%- set ns.reason = 'Kuehlbetrieb oder manuelle Klimabedienung hat Vorrang' -%}
+        {%- elif not x.windows_closed -%}{%- set ns.reason = 'Fenster offen oder unbekannt' -%}
+        {%- elif not x.bt_ready or not x.remote_ready -%}{%- set ns.reason = 'BT oder IR-Sender nicht verfuegbar' -%}
+        {%- elif x.soc is none or x.grid is none or x.battery is none or x.pv is none or x.load is none or x.outdoor is none or x.room is none or x.target is none -%}{%- set ns.reason = 'Pflichtmesswert ist nicht numerisch' -%}
+        {%- elif not (0 <= x.soc <= 100 and -100000 < x.grid < 100000 and -100000 < x.battery < 100000 and 0 <= x.pv < 100000 and 0 <= x.load < 100000 and -40 <= x.outdoor <= 60 and -10 <= x.room <= 50 and 5 < x.target <= 30) -%}{%- set ns.reason = 'Messwert unplausibel oder Raumziel ausserhalb des Bereichs' -%}
+        {%- elif x.baseline is none -%}{%- set ns.reason = 'Einstellwert nicht numerisch' -%}
+        {%- elif not (-60 <= x.energy_min_age and x.energy_age <= max_energie_alter | float) -%}{%- set ns.reason = 'Energiedaten fehlen oder sind zu alt' -%}
+        {%- elif not (-60 <= x.room_age <= (max_raum_alter | float) * 60) -%}{%- set ns.reason = 'Raumfuehler meldet zu lange nicht' -%}
+        {%- elif not (-60 <= x.outdoor_age <= (max_aussen_alter | float) * 60) -%}{%- set ns.reason = 'Aussentemperatur meldet zu lange nicht' -%}
+        {%- elif x.owner and x.soc < soc_halten | float -%}{%- set ns.reason = 'Akku unter ' ~ (soc_halten | int) ~ ' Prozent' -%}
+        {%- elif x.owner and x.outdoor >= aussen_ende | float -%}{%- set ns.reason = 'Aussentemperatur mindestens ' ~ aussen_ende ~ ' Grad' -%}
+        {%- elif x.owner and x.sicherheitsfreigabe != 'active' -%}{%- set ns.reason = 'Befristete Heizkoerperfreigabe abgelaufen' -%}
+        {%- endif -%}
+        {%- set safe = ns.reason == '' -%}
+        {%- set poor = safe and ((x.grid < -(netzbezug_max | float)) if x.owner else (x.grid < x.start_w or x.battery < -(akku_entladung_max | float) or x.pv <= 0)) -%}
+        {%- if ns.reason -%}{%- set ns.op = 'stop' if x.owner or x.sent or x.pending or x.preparing else 'blocked' -%}
+        {%- elif x.pending -%}{%- set ns.op = 'stop' -%}{%- set ns.reason = 'Unvollstaendiger IR-Auftrag: sichere Rueckgabe' -%}
+        {%- elif x.owner and poor and x.event == t_mangelfrist -%}{%- set ns.op = 'stop' -%}{%- set ns.reason = 'Netzbezug ueber ' ~ (netzbezug_max | int) ~ ' W seit ' ~ (mangel_minuten | int) ~ ' Minuten' -%}
+        {%- elif x.preparing and not x.owner -%}{%- set ns.op = 'stop' -%}{%- set ns.reason = 'Verwaiste Startvorbereitung' -%}
+        {%- elif x.preparing and x.radiator_deadline != 'active' -%}{%- set ns.op = 'stop' -%}{%- set ns.reason = 'Heizkoerper nach ' ~ (heizkoerper_minuten | int) ~ ' Minuten nicht sicher geschlossen' -%}
+        {%- elif x.owner and x.sent and not x.radiators_closed -%}{%- set ns.op = 'stop' -%}{%- set ns.reason = 'Heizkoerper nicht mehr geschlossen: Klima beenden' -%}
+        {%- elif x.preparing and x.room >= x.target -%}{%- set ns.op = 'stop' -%}{%- set ns.reason = 'Raumziel bereits waehrend Startvorbereitung erreicht' -%}
+        {%- elif x.preparing and x.radiators_closed -%}{%- set ns.op = 'start_heat' -%}{%- set ns.reason = 'Heizkoerper bei Frostschutz und Ventile geschlossen' -%}
+        {%- elif x.preparing -%}{%- set ns.op = 'wait_radiators' -%}{%- set ns.reason = 'Warte auf Heizkoerper: Frostschutz und Ventile 0 Prozent' -%}
+        {%- elif x.owner and x.sent and x.room >= x.target -%}{%- set ns.op = 'cycle_off' -%}{%- set ns.reason = 'PV-Ziel ' ~ x.target ~ ' Grad erreicht: Klima-Pause' -%}
+        {%- elif x.owner and x.sent and x.waermepruefung == 'idle' -%}
+        {%- if x.room < x.baseline + x.rise - 0.00001 -%}{%- set ns.op = 'stop' -%}{%- set ns.reason = 'Kein ausreichender Temperaturanstieg in ' ~ (pruef_minuten | int) ~ ' Minuten' -%}
+        {%- else -%}{%- set ns.op = 'proof_reset' -%}{%- set ns.reason = 'Temperaturanstieg erkannt; naechstes Prueffenster' -%}{%- endif -%}
+        {%- elif x.owner and x.sent and x.retried and x.leistung_ok and x.event == t_wiederholung and not x.laeuft -%}{%- set ns.op = 'stop' -%}{%- set ns.ir_fault = true -%}{%- set ns.reason = 'Klimaanlage reagiert auch auf die IR-Wiederholung nicht (' ~ x.leistung ~ ' W)' -%}
+        {%- elif x.owner and x.sent and not x.retried and x.leistung_ok and x.event == t_wiederholung and not x.laeuft and not poor -%}{%- set ns.op = 'retry' -%}{%- set ns.reason = 'Einmalige IR-Wiederholung: Klimaanlage nimmt nur ' ~ x.leistung ~ ' W auf' -%}
+        {%- elif x.owner and x.sent and not x.retried and x.ir_wiederholung == 'idle' and not x.leistung_ok and x.room < x.baseline + x.rise - 0.00001 and not poor -%}{%- set ns.op = 'retry' -%}{%- set ns.reason = 'Einmalige IR-Wiederholung wegen fehlendem Temperaturanstieg' -%}
+        {%- elif x.owner and x.sent -%}{%- set ns.op = 'active' -%}{%- set ns.reason = 'PV heizt angefordert' -%}
+        {%- elif x.wiederanlaufsperre != 'idle' -%}{%- set ns.reason = (sperre_minuten | int) ~ '-Minuten-Wiederanlaufsperre' -%}
+        {%- elif not x.owner and x.soc < soc_start | float -%}{%- set ns.reason = 'Akku unter ' ~ (soc_start | int) ~ ' Prozent' -%}
+        {%- elif not x.owner and x.outdoor >= aussen_start | float -%}{%- set ns.reason = 'Aussentemperatur nicht unter ' ~ aussen_start ~ ' Grad' -%}
+        {%- elif poor -%}{%- set ns.reason = 'Nicht genug Netzeinspeisung oder Akkuentladung' -%}
+        {%- elif x.room > x.target - (einschalt_abstand | float) + 0.00001 -%}{%- set ns.reason = 'PV-Pause: Raum ueber Einschaltgrenze ' ~ (x.target - (einschalt_abstand | float)) ~ ' Grad' -%}
+        {%- elif x.schaltpause != 'idle' -%}{%- set ns.reason = (schaltpause_minuten | int) ~ '-Minuten-Schaltpause nach AUS' -%}
+        {%- elif x.event == t_startfrist -%}{%- set ns.op = 'prepare_heat' -%}{%- set ns.reason = 'Startbedingungen erfuellt: zuerst Heizkoerper schliessen' -%}
+        {%- else -%}{%- set ns.op = 'qualify' -%}{%- set ns.reason = 'Startbedingungen: ' ~ (start_bestaetigung | int) ~ ' Minuten bestaetigen' -%}
+        {%- endif -%}
+        {{ dict(op=ns.op, reason=ns.reason, safe=safe, poor=poor, lease=safe and x.owner and ns.op != 'stop', ir_fault=ns.ir_fault) }}
+  - alias: "Bei freigegebener Sitzung die befristete Heizkörperpause verlängern"
+    if:
+      - alias: "Sitzung sicher und PV verantwortlich"
+        condition: "template"
+        value_template: "{{ d.lease }}"
+    then:
+      - alias: "Sicherheitsfreigabe neu starten"
+        action: "timer.start"
+        target:
+          entity_id: "{{ t_freigabe }}"
+        data:
+          duration: "{{ '%02d:%02d:00' % ((freigabe_minuten | int) // 60, (freigabe_minuten | int) % 60) }}"
+  - alias: "Energiemangel während PV begrenzt tolerieren"
+    if:
+      - alias: "PV verantwortlich und sicher"
+        condition: "template"
+        value_template: "{{ x.owner and d.safe and d.op != 'stop' }}"
+    then:
+      - alias: "Mangelfrist starten oder abbrechen"
+        if:
+          - alias: "Zu wenig Energie"
+            condition: "template"
+            value_template: "{{ d.poor }}"
+        then:
+          - alias: "Laufende Frist nicht verlängern"
+            if:
+              - alias: "Mangelfrist läuft noch nicht"
+                condition: "template"
+                value_template: "{{ is_state(t_mangelfrist, 'idle') }}"
+            then:
+              - alias: "Mangelfrist starten"
+                action: "timer.start"
+                target:
+                  entity_id: "{{ t_mangelfrist }}"
+                data:
+                  duration: "{{ '%02d:%02d:00' % ((mangel_minuten | int) // 60, (mangel_minuten | int) % 60) }}"
+        else:
+          - alias: "Energie erholt"
+            if:
+              - alias: "Mangelfrist läuft"
+                condition: "template"
+                value_template: "{{ not is_state(t_mangelfrist, 'idle') }}"
+            then:
+              - alias: "Mangelfrist abbrechen"
+                action: "timer.cancel"
+                target:
+                  entity_id: "{{ t_mangelfrist }}"
+                continue_on_error: true
+  - alias: "Unterbrochene Startbedingungen setzen die Bestätigung zurück"
+    if:
+      - alias: "Keine Qualifikation mehr und Startfrist läuft"
+        condition: "template"
+        value_template: "{{ d.op not in ['qualify', 'start_heat', 'prepare_heat'] and not is_state(t_startfrist, 'idle') }}"
+    then:
+      - alias: "Startfrist abbrechen"
+        action: "timer.cancel"
+        target:
+          entity_id: "{{ t_startfrist }}"
+        continue_on_error: true
+  - alias: "Genau den aktuellen Regelungsschritt ausführen"
+    choose:
+      - alias: "Heizkörper vor dem Klimastart schließen"
+        conditions:
+          - alias: "Startvorbereitung"
+            condition: "template"
+            value_template: "{{ d.op == 'prepare_heat' }}"
+        sequence:
+          - alias: "Heizkörperfrist starten"
+            action: "timer.start"
+            target:
+              entity_id: "{{ t_heizkoerper }}"
+            data:
+              duration: "{{ '%02d:%02d:00' % ((heizkoerper_minuten | int) // 60, (heizkoerper_minuten | int) % 60) }}"
+          - alias: "Sicherheitsfreigabe starten"
+            action: "timer.start"
+            target:
+              entity_id: "{{ t_freigabe }}"
+            data:
+              duration: "{{ '%02d:%02d:00' % ((freigabe_minuten | int) // 60, (freigabe_minuten | int) % 60) }}"
+          - alias: "Startvorbereitung markieren"
+            action: "input_boolean.turn_on"
+            target:
+              entity_id: "{{ f_vorbereitung }}"
+          - alias: "PV übernimmt die Verantwortung (Raumheizung schließt die Heizkörper)"
+            action: "input_boolean.turn_on"
+            target:
+              entity_id: "{{ f_regelung }}"
+          - alias: "Sichtbaren PV-Status aktualisieren"
+            action: "input_text.set_value"
+            target:
+              entity_id: "{{ status_text }}"
+            data:
+              value: "{{ ('PV: Heizkoerper schliessen; Klima wartet auf Frostschutz und Ventile 0%')[:255] }}"
+      - alias: "Heizanforderung nach bestätigtem Start senden"
+        conditions:
+          - alias: "Heizkörper geschlossen"
+            condition: "template"
+            value_template: "{{ d.op == 'start_heat' }}"
+        sequence:
+          - alias: "HEIZEN-Befehl als abgesicherter Auftrag senden"
+            continue_on_error: true
+            sequence:
+              - alias: "IR-Auftrag als offen markieren"
+                action: "input_boolean.turn_on"
+                target:
+                  entity_id: "{{ f_auftrag }}"
+              - alias: "Nur senden, wenn alle Heizkörper sicher geschlossen sind"
+                condition: "template"
+                value_template: "{%- set ns = namespace(zu=true) -%}{%- for t in heizkoerper -%}{%- if not (states(t) in ['heat', 'off'] and is_number(state_attr(t, 'temperature')) and state_attr(t, 'temperature') | float(99) <= 5) -%}{%- set ns.zu = false -%}{%- endif -%}{%- endfor -%}{%- for v in ventile -%}{%- if not (is_number(states(v)) and states(v) | float(99) == 0) -%}{%- set ns.zu = false -%}{%- endif -%}{%- endfor -%}{{ is_state(bt, 'off') and heizkoerper | count > 0 and ns.zu }}"
+              - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                if:
+                  - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                    condition: "template"
+                    value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                then:
+                  - alias: "Steckdose einschalten"
+                    action: "switch.turn_on"
+                    target:
+                      entity_id: "{{ klima_steckdose }}"
+                    continue_on_error: true
+                  - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                    wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                    timeout:
+                      seconds: 20
+                  - alias: "Nur weiter, wenn die Steckdose eingeschaltet ist"
+                    condition: "template"
+                    value_template: "{{ is_state(klima_steckdose, 'on') }}"
+                  - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                    delay:
+                      seconds: "{{ vorlauf_s | int }}"
+              - alias: "Gelernten Vollzustand HEIZEN senden"
+                action: "remote.send_command"
+                target:
+                  entity_id: "{{ klima_sender }}"
+                data:
+                  device: "{{ ir_geraet }}"
+                  command: "{{ befehl_heizen }}"
+              - alias: "Heizbefehl als aktiv markieren"
+                action: "input_boolean.turn_on"
+                target:
+                  entity_id: "{{ f_heizbefehl }}"
+              - alias: "IR-Auftrag schließen"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ f_auftrag }}"
+          - alias: "Nur bei erfolgreichem Senden fortsetzen"
+            if:
+              - alias: "Heizbefehl gesetzt und Auftrag geschlossen"
+                condition: "template"
+                value_template: "{{ is_state(f_heizbefehl, 'on') and is_state(f_auftrag, 'off') }}"
+            then:
+              - alias: "Startvorbereitung beenden"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ f_vorbereitung }}"
+              - alias: "Heizkörperfrist abbrechen"
+                action: "timer.cancel"
+                target:
+                  entity_id: "{{ t_heizkoerper }}"
+                continue_on_error: true
+              - alias: "Starttemperatur für die Wärmeprüfung merken"
+                action: "input_number.set_value"
+                target:
+                  entity_id: "{{ starttemperatur }}"
+                data:
+                  value: "{{ states(raumfuehler) | float }}"
+              - alias: "Wiederholungsmerker löschen"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ f_wiederholt }}"
+              - alias: "IR-Wiederholungsfrist starten"
+                action: "timer.start"
+                target:
+                  entity_id: "{{ t_wiederholung }}"
+                data:
+                  duration: "{{ '%02d:%02d:00' % ((wiederholung_minuten | int) // 60, (wiederholung_minuten | int) % 60) }}"
+              - alias: "Wärmeprüfung starten"
+                action: "timer.start"
+                target:
+                  entity_id: "{{ t_waermepruefung }}"
+                data:
+                  duration: "{{ '%02d:%02d:00' % ((pruef_minuten | int) // 60, (pruef_minuten | int) % 60) }}"
+              - alias: "Sicherheitsfreigabe starten"
+                action: "timer.start"
+                target:
+                  entity_id: "{{ t_freigabe }}"
+                data:
+                  duration: "{{ '%02d:%02d:00' % ((freigabe_minuten | int) // 60, (freigabe_minuten | int) % 60) }}"
+              - alias: "PV-Verantwortung bestätigen"
+                action: "input_boolean.turn_on"
+                target:
+                  entity_id: "{{ f_regelung }}"
+              - alias: "Sichtbaren PV-Status aktualisieren"
+                action: "input_text.set_value"
+                target:
+                  entity_id: "{{ status_text }}"
+                data:
+                  value: "{{ ('PV: HEIZEN angefordert; Heizwirkung wird geprueft')[:255] }}"
+      - alias: "Startbestätigung beginnen oder weiterlaufen lassen"
+        conditions:
+          - alias: "Qualifikation"
+            condition: "template"
+            value_template: "{{ d.op == 'qualify' }}"
+        sequence:
+          - alias: "Nur eine laufende Startfrist"
+            if:
+              - alias: "Startfrist läuft noch nicht"
+                condition: "template"
+                value_template: "{{ is_state(t_startfrist, 'idle') }}"
+            then:
+              - alias: "Startfrist starten"
+                action: "timer.start"
+                target:
+                  entity_id: "{{ t_startfrist }}"
+                data:
+                  duration: "{{ '%02d:%02d:00' % ((start_bestaetigung | int) // 60, (start_bestaetigung | int) % 60) }}"
+          - alias: "Sichtbaren PV-Status aktualisieren"
+            action: "input_text.set_value"
+            target:
+              entity_id: "{{ status_text }}"
+            data:
+              value: "{{ (d.reason)[:255] }}"
+      - alias: "Zieltemperatur erreicht: Klimaanlage pausieren"
+        conditions:
+          - alias: "Obere Schwelle"
+            condition: "template"
+            value_template: "{{ d.op == 'cycle_off' }}"
+        sequence:
+          - alias: "HEIZEN-AUS-Befehl senden"
+            continue_on_error: true
+            sequence:
+              - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                if:
+                  - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                    condition: "template"
+                    value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                then:
+                  - alias: "Steckdose einschalten"
+                    action: "switch.turn_on"
+                    target:
+                      entity_id: "{{ klima_steckdose }}"
+                    continue_on_error: true
+                  - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                    wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                    timeout:
+                      seconds: 20
+                  - alias: "Nur weiter, wenn die Steckdose eingeschaltet ist"
+                    condition: "template"
+                    value_template: "{{ is_state(klima_steckdose, 'on') }}"
+                  - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                    delay:
+                      seconds: "{{ vorlauf_s | int }}"
+              - alias: "Gelernten AUS-Zustand senden"
+                action: "remote.send_command"
+                target:
+                  entity_id: "{{ klima_sender }}"
+                data:
+                  device: "{{ ir_geraet }}"
+                  command: "{{ befehl_heizen_aus }}"
+              - alias: "Heizbefehl zurücknehmen"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ f_heizbefehl }}"
+              - alias: "IR-Auftrag schließen"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ f_auftrag }}"
+          - alias: "Nur bei erfolgreichem AUS die Pause einleiten"
+            if:
+              - alias: "Heizbefehl zurückgenommen"
+                condition: "template"
+                value_template: "{{ is_state(f_heizbefehl, 'off') }}"
+            then:
+              - alias: "Schaltpause starten"
+                action: "timer.start"
+                target:
+                  entity_id: "{{ t_schaltpause }}"
+                data:
+                  duration: "{{ '%02d:%02d:00' % ((schaltpause_minuten | int) // 60, (schaltpause_minuten | int) % 60) }}"
+              - alias: "IR-Wiederholung abbrechen"
+                action: "timer.cancel"
+                target:
+                  entity_id: "{{ t_wiederholung }}"
+                continue_on_error: true
+              - alias: "Wärmeprüfung abbrechen"
+                action: "timer.cancel"
+                target:
+                  entity_id: "{{ t_waermepruefung }}"
+                continue_on_error: true
+              - alias: "Sichtbaren PV-Status aktualisieren"
+                action: "input_text.set_value"
+                target:
+                  entity_id: "{{ status_text }}"
+                data:
+                  value: "{{ ('PV-Regelung: Temperaturpause bis Einschaltgrenze')[:255] }}"
+      - alias: "Höchstens eine IR-Wiederholung je Heizzyklus"
+        conditions:
+          - alias: "Wiederholung"
+            condition: "template"
+            value_template: "{{ d.op == 'retry' }}"
+        sequence:
+          - alias: "Wiederholung vermerken"
+            action: "input_boolean.turn_on"
+            target:
+              entity_id: "{{ f_wiederholt }}"
+          - alias: "HEIZEN-Befehl als abgesicherter Auftrag senden"
+            continue_on_error: true
+            sequence:
+              - alias: "IR-Auftrag als offen markieren"
+                action: "input_boolean.turn_on"
+                target:
+                  entity_id: "{{ f_auftrag }}"
+              - alias: "Nur senden, wenn alle Heizkörper sicher geschlossen sind"
+                condition: "template"
+                value_template: "{%- set ns = namespace(zu=true) -%}{%- for t in heizkoerper -%}{%- if not (states(t) in ['heat', 'off'] and is_number(state_attr(t, 'temperature')) and state_attr(t, 'temperature') | float(99) <= 5) -%}{%- set ns.zu = false -%}{%- endif -%}{%- endfor -%}{%- for v in ventile -%}{%- if not (is_number(states(v)) and states(v) | float(99) == 0) -%}{%- set ns.zu = false -%}{%- endif -%}{%- endfor -%}{{ is_state(bt, 'off') and heizkoerper | count > 0 and ns.zu }}"
+              - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                if:
+                  - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                    condition: "template"
+                    value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                then:
+                  - alias: "Steckdose einschalten"
+                    action: "switch.turn_on"
+                    target:
+                      entity_id: "{{ klima_steckdose }}"
+                    continue_on_error: true
+                  - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                    wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                    timeout:
+                      seconds: 20
+                  - alias: "Nur weiter, wenn die Steckdose eingeschaltet ist"
+                    condition: "template"
+                    value_template: "{{ is_state(klima_steckdose, 'on') }}"
+                  - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                    delay:
+                      seconds: "{{ vorlauf_s | int }}"
+              - alias: "Gelernten Vollzustand HEIZEN senden"
+                action: "remote.send_command"
+                target:
+                  entity_id: "{{ klima_sender }}"
+                data:
+                  device: "{{ ir_geraet }}"
+                  command: "{{ befehl_heizen }}"
+              - alias: "Heizbefehl als aktiv markieren"
+                action: "input_boolean.turn_on"
+                target:
+                  entity_id: "{{ f_heizbefehl }}"
+              - alias: "IR-Auftrag schließen"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ f_auftrag }}"
+          - alias: "Status bei erfolgreicher Wiederholung"
+            if:
+              - alias: "Auftrag geschlossen"
+                condition: "template"
+                value_template: "{{ is_state(f_auftrag, 'off') }}"
+            then:
+              - alias: "IR-Wiederholungsfrist neu starten (danach Rückmeldung über die Leistung prüfen)"
+                action: "timer.start"
+                target:
+                  entity_id: "{{ t_wiederholung }}"
+                data:
+                  duration: "{{ '%02d:%02d:00' % ((wiederholung_minuten | int) // 60, (wiederholung_minuten | int) % 60) }}"
+              - alias: "Sichtbaren PV-Status aktualisieren"
+                action: "input_text.set_value"
+                target:
+                  entity_id: "{{ status_text }}"
+                data:
+                  value: "{{ (d.reason)[:255] }}"
+      - alias: "Temperaturwirkung vorhanden: neues Prüffenster"
+        conditions:
+          - alias: "Prüfung bestanden"
+            condition: "template"
+            value_template: "{{ d.op == 'proof_reset' }}"
+        sequence:
+          - alias: "Neue Temperaturreferenz merken"
+            action: "input_number.set_value"
+            target:
+              entity_id: "{{ starttemperatur }}"
+            data:
+              value: "{{ x.room }}"
+          - alias: "Wärmeprüfung neu starten"
+            action: "timer.start"
+            target:
+              entity_id: "{{ t_waermepruefung }}"
+            data:
+              duration: "{{ '%02d:%02d:00' % ((pruef_minuten | int) // 60, (pruef_minuten | int) % 60) }}"
+          - alias: "Wiederholungsmerker setzen"
+            action: "input_boolean.turn_on"
+            target:
+              entity_id: "{{ f_wiederholt }}"
+          - alias: "Sichtbaren PV-Status aktualisieren"
+            action: "input_text.set_value"
+            target:
+              entity_id: "{{ status_text }}"
+            data:
+              value: "{{ (d.reason)[:255] }}"
+    default:
+      - alias: "Sichtbaren PV-Status aktualisieren"
+        action: "input_text.set_value"
+        target:
+          entity_id: "{{ status_text }}"
+        data:
+          value: "{{ (('PV: ' if x.owner else 'Blockiert: ') ~ d.reason ~ ('; Energiemangelfrist laeuft' if x.owner and d.poor else ''))[:255] }}"
+  - alias: "Sichere Rückgabe bei Stopp oder fehlgeschlagenem Senden"
+    if:
+      - alias: "Stopp entschieden oder IR-Schritt fehlgeschlagen"
+        condition: "template"
+        value_template: "{{ d.op == 'stop' or (d.op == 'start_heat' and not (is_state(f_heizbefehl, 'on') and is_state(f_auftrag, 'off'))) or (d.op == 'retry' and is_state(f_auftrag, 'on')) or (d.op == 'cycle_off' and is_state(f_heizbefehl, 'on')) }}"
+    then:
+      - alias: "Grund und Fehlerstatus der Rückgabe bestimmen"
+        variables:
+          rueckgabe_grund: "{{ d.reason if d.op == 'stop' else ('IR-EIN fehlgeschlagen' if d.op == 'start_heat' else ('IR-Wiederholung fehlgeschlagen' if d.op == 'retry' else 'IR-AUS fehlgeschlagen')) }}"
+          rueckgabe_fehler: "{{ (x.pending or d.ir_fault) if d.op == 'stop' else true }}"
+      - alias: "Bisherige PV-Verantwortung merken"
+        variables:
+          hat_pv: "{{ is_state(f_regelung, 'on') or is_state(f_heizbefehl, 'on') or is_state(f_auftrag, 'on') or is_state(f_vorbereitung, 'on') }}"
+      - alias: "Klimaanlage nur bei eigener Heizanforderung ausschalten"
+        if:
+          - alias: "Eigener Heizbefehl oder offener Auftrag"
+            condition: "template"
+            value_template: "{{ is_state(f_heizbefehl, 'on') or is_state(f_auftrag, 'on') }}"
+        then:
+          - alias: "HEIZEN-AUS-Befehl senden"
+            continue_on_error: true
+            sequence:
+              - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                if:
+                  - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                    condition: "template"
+                    value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                then:
+                  - alias: "Steckdose einschalten"
+                    action: "switch.turn_on"
+                    target:
+                      entity_id: "{{ klima_steckdose }}"
+                    continue_on_error: true
+                  - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                    wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                    timeout:
+                      seconds: 20
+                  - alias: "Nur weiter, wenn die Steckdose eingeschaltet ist"
+                    condition: "template"
+                    value_template: "{{ is_state(klima_steckdose, 'on') }}"
+                  - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                    delay:
+                      seconds: "{{ vorlauf_s | int }}"
+              - alias: "Gelernten AUS-Zustand senden"
+                action: "remote.send_command"
+                target:
+                  entity_id: "{{ klima_sender }}"
+                data:
+                  device: "{{ ir_geraet }}"
+                  command: "{{ befehl_heizen_aus }}"
+              - alias: "Heizbefehl zurücknehmen"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ f_heizbefehl }}"
+              - alias: "IR-Auftrag schließen"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ f_auftrag }}"
+      - alias: "Startvorbereitung beenden"
+        action: "input_boolean.turn_off"
+        target:
+          entity_id: "{{ f_vorbereitung }}"
+      - alias: "Heizkörperfrist abbrechen"
+        action: "timer.cancel"
+        target:
+          entity_id: "{{ t_heizkoerper }}"
+        continue_on_error: true
+      - alias: "PV-Verantwortung abgeben"
+        action: "input_boolean.turn_off"
+        target:
+          entity_id: "{{ f_regelung }}"
+      - alias: "Sicherheitsfreigabe abbrechen (Heizkörper werden sofort freigegeben)"
+        action: "timer.cancel"
+        target:
+          entity_id: "{{ t_freigabe }}"
+        continue_on_error: true
+      - alias: "Fehlgeschlagene Sendung sperrt weitere Versuche"
+        if:
+          - alias: "Sendefehler oder Befehl nicht sicher zurückgenommen"
+            condition: "template"
+            value_template: "{{ rueckgabe_fehler | default(false) or is_state(f_heizbefehl, 'on') or is_state(f_auftrag, 'on') }}"
+        then:
+          - alias: "IR-Fehler setzen"
+            action: "input_boolean.turn_on"
+            target:
+              entity_id: "{{ f_fehler }}"
+          - alias: "PV-Heizfreigabe ausschalten"
+            action: "input_boolean.turn_off"
+            target:
+              entity_id: "{{ f_heizfreigabe }}"
+          - alias: "IR-Fehler dauerhaft melden"
+            action: "persistent_notification.create"
+            data:
+              notification_id: "{{ 'hz_pv_ir_fehler_' ~ raum_schluessel }}"
+              title: "{{ raum_name }} PV: IR-Senden fehlgeschlagen"
+              message: "PV gesperrt, normale Heizung freigegeben. Klimazustand vor Ort prüfen und ggf. mit der Originalfernbedienung ausschalten. Danach „IR-Fehler“ ausschalten und die PV-Heizfreigabe erneut einschalten."
+          - alias: "Sichtbaren PV-Status aktualisieren"
+            action: "input_text.set_value"
+            target:
+              entity_id: "{{ status_text }}"
+            data:
+              value: "{{ ('IR-Sendefehler: PV gesperrt, Klimazustand vor Ort pruefen')[:255] }}"
+      - alias: "Restliche PV-Merker zurücksetzen"
+        action: "input_boolean.turn_off"
+        target:
+          entity_id: "{{ [f_heizbefehl, f_auftrag, f_wiederholt] }}"
+        continue_on_error: true
+      - alias: "Startfrist abbrechen"
+        action: "timer.cancel"
+        target:
+          entity_id: "{{ t_startfrist }}"
+        continue_on_error: true
+      - alias: "Mangelfrist abbrechen"
+        action: "timer.cancel"
+        target:
+          entity_id: "{{ t_mangelfrist }}"
+        continue_on_error: true
+      - alias: "IR-Wiederholung abbrechen"
+        action: "timer.cancel"
+        target:
+          entity_id: "{{ t_wiederholung }}"
+        continue_on_error: true
+      - alias: "Wärmeprüfung abbrechen"
+        action: "timer.cancel"
+        target:
+          entity_id: "{{ t_waermepruefung }}"
+        continue_on_error: true
+      - alias: "Nach beendetem PV-Betrieb erneute Versuche begrenzen"
+        if:
+          - alias: "PV war verantwortlich"
+            condition: "template"
+            value_template: "{{ hat_pv }}"
+        then:
+          - alias: "Wiederanlaufsperre starten"
+            action: "timer.start"
+            target:
+              entity_id: "{{ t_sperre }}"
+            data:
+              duration: "{{ '%02d:%02d:00' % ((sperre_minuten | int) // 60, (sperre_minuten | int) % 60) }}"
+          - alias: "Schaltpause starten"
+            action: "timer.start"
+            target:
+              entity_id: "{{ t_schaltpause }}"
+            data:
+              duration: "{{ '%02d:%02d:00' % ((schaltpause_minuten | int) // 60, (schaltpause_minuten | int) % 60) }}"
+      - alias: "Rückgabegrund anzeigen, Fehlerhinweis hat Vorrang"
+        if:
+          - alias: "Kein IR-Fehler"
+            condition: "template"
+            value_template: "{{ not is_state(f_fehler, 'on') }}"
+        then:
+          - alias: "Sichtbaren PV-Status aktualisieren"
+            action: "input_text.set_value"
+            target:
+              entity_id: "{{ status_text }}"
+            data:
+              value: "{{ (rueckgabe_grund | default('PV beendet: normale Heizung uebernimmt'))[:255] }}"

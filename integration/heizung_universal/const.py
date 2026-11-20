@@ -1,0 +1,1 @@
+DOMAIN = "heizung_universal"

@@ -1,0 +1,2836 @@
+# Klimaautomatik – Blueprint 2 von 3 (optional)
+# Erzeugt mit tools/build_klima.py
+blueprint:
+  name: "Klimaautomatik (Raum)"
+  description: "Paketversion 1.6.0 · Optionale Ergänzung zur „Universellen Raumheizungssteuerung“ für Räume mit Klimaanlage (IR-Steuerung, z. B. Broadlink). Betriebsarten Aus, Automatik Kühlen (Hysterese und Stufentabelle) und Manuell Kühlen. Kühlen nur, wenn die Raumheizung in einem freigegebenen Profil steht (Standard Sommer/Aus), alle Fenster zu sind und es draußen warm genug ist. Fensterpause mit Wiederherstellung, Schutz bei ungültigen Sensoren, sichere Wiederherstellung nach Neustarts. Arbeitet mit „PV-Überschussheizen“ zusammen: Bedienung hat Vorrang, Notrückgabe bei Ausfall der PV-Automation. Optional mit schaltbarer Messsteckdose: Steckdose bleibt dauerhaft eingeschaltet (vor jedem Befehl gesichert), Rückmeldung über die Leistung mit einmaliger Wiederholung und Meldung."
+  domain: "automation"
+  author: "HA-Heizung-Universal"
+  homeassistant:
+    min_version: "2026.11.0"
+  input:
+    geraete:
+      name: "Raum und Klimaanlage"
+      icon: "mdi:air-conditioner"
+      input:
+        raum_name:
+          name: "Raumname"
+          default: "Raum"
+          selector:
+            text: {}
+        raum_schluessel:
+          name: "Raumkennung"
+          default: "raum"
+          description: "Wie in der Raumheizungssteuerung, z. B. `wohnzimmer`."
+          selector:
+            text: {}
+        klima_sender:
+          name: "IR-Sender der Klimaanlage"
+          description: "Remote-Entität (z. B. Broadlink), die die gelernten Klimabefehle sendet."
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "remote"
+              multiple: false
+        ir_geraet:
+          name: "Gerätename der gelernten Befehle"
+          default: "klima"
+          description: "Der beim Anlernen verwendete Gerätename (Parameter „device“ von remote.send_command)."
+          selector:
+            text: {}
+        raumfuehler:
+          name: "Raumtemperatur"
+          description: "Externer Raumfühler oder das Better Thermostat des Raums."
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "sensor"
+                  device_class:
+                    - "temperature"
+                - domain:
+                    - "climate"
+        aussentemperatur:
+          name: "Außentemperatur"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "sensor"
+                  device_class:
+                    - "temperature"
+              multiple: false
+        fensterkontakte:
+          name: "Fensterkontakte für die Klimaanlage"
+          default: []
+          description: "Kontakte, deren Öffnen die Klimaanlage pausiert (können andere sein als bei der Heizung)."
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain:
+                    - "binary_sensor"
+                  device_class:
+                    - "window"
+                    - "door"
+                    - "opening"
+                - domain:
+                    - "input_boolean"
+    befehle:
+      name: "IR-Befehle"
+      icon: "mdi:remote"
+      collapsed: true
+      description: "Namen der gelernten Befehle. `{stufe}` wird durch die Temperaturstufe (z. B. 20) ersetzt, `{luefter}` durch die Lüfterstufe. Viele Klimaanlagen senden vollständige Zustände (Modus + Temperatur + Lüfter in einem Befehl) – dann je Temperatur einen Befehl anlernen, z. B. `power_20`. Der IR-Sender wird nur in dieser Automation gewählt; das PV-Überschussheizen verwendet denselben Sender und die hier eingetragenen Heizbefehle."
+      input:
+        befehl_kuehlen:
+          name: "Kühlen mit Stufe"
+          default: "power_{stufe}"
+          selector:
+            text: {}
+        befehl_kuehlen_zusatz:
+          name: "Zusatzbefehle nach dem Kühlbefehl (optional)"
+          default: "eco_{stufe}"
+          description: "Werden nacheinander im Abstand von 1 s nach dem Kühlbefehl gesendet. Mehrere durch Komma trennen, z. B. `eco_{stufe}, display_off`. Leer lassen, wenn nicht benötigt."
+          selector:
+            text: {}
+        befehl_aus:
+          name: "Ausschalten"
+          default: "power_off"
+          selector:
+            text: {}
+        luefter:
+          name: "Lüfterstufe (optional)"
+          default: ""
+          description: "Wird für `{luefter}` in den Befehlsnamen eingesetzt, z. B. `auto`, `niedrig`, `hoch`. Leer lassen, wenn die Befehle keine Lüfterstufe enthalten."
+          selector:
+            text: {}
+        befehl_heizen:
+          name: "Heizen (vollständiger Zustand, z. B. Heizen 24 °C)"
+          default: "heizen_24"
+          description: "Wird nur vom PV-Überschussheizen dieses Raums verwendet. `{stufe}` wird durch dessen Heizstufe ersetzt (z. B. `heizen_{stufe}`)."
+          selector:
+            text: {}
+        befehl_heizen_aus:
+          name: "Heizen aus"
+          default: "heizen_24_off"
+          description: "Wird nur vom PV-Überschussheizen dieses Raums verwendet."
+          selector:
+            text: {}
+        ir_konfiguration:
+          name: "Gemeinsame IR-Konfiguration (input_text, optional)"
+          default: []
+          description: "Hier veröffentlicht die Klimaautomatik Sender, Gerätename und Heizbefehle. Das PV-Überschussheizen liest sie von dort. Bei einem Wechsel des IR-Senders genügt deshalb die Änderung in dieser Automation."
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_text"
+              multiple: false
+        stufe_min:
+          name: "Niedrigste Stufe"
+          default: 16
+          selector:
+            number:
+              min: 16
+              max: 30
+              step: 1
+              mode: "box"
+              unit_of_measurement: "°C"
+        stufe_max:
+          name: "Höchste Stufe"
+          default: 23
+          selector:
+            number:
+              min: 16
+              max: 30
+              step: 1
+              mode: "box"
+              unit_of_measurement: "°C"
+    strom:
+      name: "Stromversorgung und Rückmeldung (optional)"
+      icon: "mdi:power-socket-de"
+      collapsed: true
+      description: "Für eine schaltbare Messsteckdose vor der Klimaanlage. Die Steckdose bleibt dauerhaft eingeschaltet: Vor jedem IR-Befehl wird sie bei Bedarf eingeschaltet (danach kurze Wartezeit zum Hochfahren), nach versehentlichem Ausschalten wieder eingeschaltet. Ausgeschaltet wird sie von dieser Automation nie. Mit Leistungsmessung prüft die Automation, ob die Klimaanlage einen Befehl wirklich ausgeführt hat, wiederholt ihn sonst einmal und meldet sich, wenn auch das nicht wirkt."
+      input:
+        klima_steckdose:
+          name: "Steckdose der Klimaanlage (optional)"
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "switch"
+              multiple: false
+        steckdose_halten:
+          name: "Steckdose dauerhaft eingeschaltet halten"
+          default: true
+          description: "Wird die Steckdose ausgeschaltet, schaltet die Automation sie nach 1 Minute wieder ein und stellt den Klimazustand wieder her."
+          selector:
+            boolean: {}
+        vorlauf_s:
+          name: "Wartezeit nach dem Einschalten der Steckdose"
+          default: 30
+          description: "So lange braucht die Klimaanlage nach dem Einschalten, bis sie IR-Befehle annimmt."
+          selector:
+            number:
+              min: 5
+              max: 120
+              step: 5
+              mode: "box"
+              unit_of_measurement: "s"
+        klima_leistung:
+          name: "Leistungsmessung der Klimaanlage (optional)"
+          default: []
+          description: "Meist der Leistungssensor derselben Messsteckdose."
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "sensor"
+                  device_class:
+                    - "power"
+              multiple: false
+        laeuft_ab_w:
+          name: "Klimaanlage gilt als laufend ab"
+          default: 15
+          description: "Deutlich über dem Bereitschaftsverbrauch (meist 1–3 W) und unter der Leistung des Lüfters allein."
+          selector:
+            number:
+              min: 2
+              max: 500
+              step: 1
+              mode: "box"
+              unit_of_measurement: "W"
+        pruef_ein_min:
+          name: "Rückmeldung nach dem Einschalten prüfen nach"
+          default: 3
+          selector:
+            number:
+              min: 1
+              max: 30
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+        pruef_aus_min:
+          name: "Rückmeldung nach dem Ausschalten prüfen nach"
+          default: 10
+          description: "Großzügig wählen: Viele Klimaanlagen trocknen nach dem Ausschalten noch einige Minuten mit dem Lüfter."
+          selector:
+            number:
+              min: 1
+              max: 60
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+    automatik:
+      name: "Automatik-Kühlen"
+      icon: "mdi:snowflake-thermometer"
+      collapsed: true
+      input:
+        ein_ueber:
+          name: "Einschalten ab Ziel plus"
+          default: 0.5
+          selector:
+            number:
+              min: 0
+              max: 3
+              step: 0.1
+              mode: "slider"
+              unit_of_measurement: "K"
+        aus_unter:
+          name: "Ausschalten ab Ziel minus"
+          default: 0.2
+          selector:
+            number:
+              min: 0
+              max: 3
+              step: 0.1
+              mode: "slider"
+              unit_of_measurement: "K"
+        aussen_min:
+          name: "Kühlen erst ab Außentemperatur"
+          default: 16
+          selector:
+            number:
+              min: 0
+              max: 30
+              step: 0.5
+              mode: "slider"
+              unit_of_measurement: "°C"
+        fenster_minuten:
+          name: "Pause, wenn ein Fenster offen ist seit"
+          default: 3
+          selector:
+            number:
+              min: 0
+              max: 30
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+        stufe_sehr_warm_ab:
+          name: "Raum wärmer als … → Stufe"
+          default: 24
+          selector:
+            number:
+              min: 18
+              max: 35
+              step: 0.5
+              mode: "box"
+              unit_of_measurement: "°C"
+        stufe_sehr_warm:
+          name: "… dann Stufe"
+          default: 17
+          selector:
+            number:
+              min: 16
+              max: 30
+              step: 1
+              mode: "box"
+              unit_of_measurement: "°C"
+        stufe_warm_ab:
+          name: "Raum wärmer als … → Stufe"
+          default: 23
+          selector:
+            number:
+              min: 18
+              max: 35
+              step: 0.5
+              mode: "box"
+              unit_of_measurement: "°C"
+        stufe_warm:
+          name: "… dann Stufe"
+          default: 18
+          selector:
+            number:
+              min: 16
+              max: 30
+              step: 1
+              mode: "box"
+              unit_of_measurement: "°C"
+        stufe_mild_ab:
+          name: "Raum mindestens … → Stufe"
+          default: 22
+          selector:
+            number:
+              min: 18
+              max: 35
+              step: 0.5
+              mode: "box"
+              unit_of_measurement: "°C"
+        stufe_mild:
+          name: "… dann Stufe (sonst: Zieltemperatur)"
+          default: 20
+          selector:
+            number:
+              min: 16
+              max: 30
+              step: 1
+              mode: "box"
+              unit_of_measurement: "°C"
+    heizung:
+      name: "Zusammenarbeit mit der Raumheizung"
+      icon: "mdi:radiator"
+      collapsed: true
+      description: "Kühlen ist nur erlaubt, wenn die Heizung dieses Raums in einem der gewählten Profile steht (wie im Bestand: Sommer oder Aus) oder der globale Schalter „Heizung Aus“ an ist."
+      input:
+        heizprofil:
+          name: "Heizprofil-Auswahl der Raumheizung"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_select"
+              multiple: false
+        kuehl_profile:
+          name: "Kühlen erlaubt in den Heizprofilen"
+          default:
+            - "Sommer"
+            - "Aus"
+          selector:
+            select:
+              multiple: true
+              mode: "list"
+              options:
+                - "Komfort"
+                - "Übergang"
+                - "Urlaub"
+                - "Sommer"
+                - "Aus"
+        haus_heizung_aus:
+          name: "Globaler Schalter „Heizung Aus“ (optional)"
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+    helfer:
+      name: "Raum-Helfer der Klimaanlage"
+      icon: "mdi:tune-variant"
+      collapsed: true
+      description: "Legt der Einrichtungsassistent an. Die Dashboard-Karte bedient die Klimaanlage nur über diese Helfer."
+      input:
+        klima_modus:
+          name: "Klima-Modus (input_select: Aus, Automatik Kühlen, Manuell Kühlen)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_select"
+              multiple: false
+        zieltemperatur:
+          name: "Automatik-Zieltemperatur (input_number)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_number"
+              multiple: false
+        manuelle_stufe:
+          name: "Manuelle Stufe (input_number)"
+          description: "Eine Änderung schaltet auf „Manuell Kühlen“ und sendet diese Stufe."
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_number"
+              multiple: false
+        letzte_stufe:
+          name: "Zuletzt gesendete Stufe (input_number)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_number"
+              multiple: false
+        klima_aktiv:
+          name: "Kühlbefehl aktiv (input_boolean)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+        modus_vor_fenster:
+          name: "Speicher „Modus vor Fenster“ (input_text)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_text"
+              multiple: false
+    pv:
+      name: "Zusammenarbeit mit PV-Überschussheizen"
+      icon: "mdi:solar-power-variant"
+      collapsed: true
+      description: "Nur wenn in diesem Raum die Blueprint „PV-Überschussheizen“ läuft. Jede Klimabedienung beendet zuerst eine laufende PV-Heizsitzung (Vorrang der Bedienung). Fällt die PV-Automation aus, während die Klimaanlage für PV heizt, schaltet diese Automation die Klimaanlage nach spätestens 2 Minuten sicher ab (Notrückgabe)."
+      input:
+        pv_aktiv:
+          name: "PV-Überschussheizen in diesem Raum"
+          default: false
+          selector:
+            boolean: {}
+        pv_automation:
+          name: "PV-Überschussheizen-Automation dieses Raums"
+          default: []
+          visible:
+            field: "pv_aktiv"
+            value: true
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "automation"
+              multiple: false
+        pv_heizfreigabe:
+          name: "PV-Heizfreigabe (input_boolean)"
+          default: []
+          visible:
+            field: "pv_aktiv"
+            value: true
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+        pv_heizbefehl:
+          name: "PV: Heizbefehl aktiv (input_boolean)"
+          default: []
+          visible:
+            field: "pv_aktiv"
+            value: true
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+        pv_auftrag:
+          name: "PV: IR-Auftrag offen (input_boolean)"
+          default: []
+          visible:
+            field: "pv_aktiv"
+            value: true
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+        pv_verantwortung:
+          name: "PV: weitere Verantwortungs-Helfer (Regelung aktiv, Startvorbereitung)"
+          default: []
+          visible:
+            field: "pv_aktiv"
+            value: true
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain:
+                    - "input_boolean"
+        pv_freigabe:
+          name: "PV-Sicherheitsfreigabe (Timer)"
+          default: []
+          visible:
+            field: "pv_aktiv"
+            value: true
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "timer"
+              multiple: false
+        pv_status:
+          name: "PV-Status-Text (input_text)"
+          default: []
+          visible:
+            field: "pv_aktiv"
+            value: true
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_text"
+              multiple: false
+    erweitert:
+      name: "Erweitert"
+      icon: "mdi:cog"
+      collapsed: true
+      input:
+        ausgabe_modus:
+          name: "Betriebsart"
+          default: "produktiv"
+          selector:
+            select:
+              mode: "list"
+              options:
+                - value: "produktiv"
+                  label: "Normalbetrieb"
+                - value: "test"
+                  label: "Testbetrieb (Entscheidung nur ins Logbuch)"
+mode: "queued"
+max: 10
+max_exceeded: "warning"
+trace:
+  stored_traces: 20
+trigger_variables:
+  pruef_ein_tv: !input pruef_ein_min
+  pruef_aus_tv: !input pruef_aus_min
+variables:
+  raum_name: !input raum_name
+  raum_schluessel: !input raum_schluessel
+  klima_sender: !input klima_sender
+  ir_geraet: !input ir_geraet
+  raumfuehler: !input raumfuehler
+  fensterkontakte: !input fensterkontakte
+  befehl_kuehlen: !input befehl_kuehlen
+  befehl_kuehlen_zusatz: !input befehl_kuehlen_zusatz
+  befehl_aus: !input befehl_aus
+  luefter: !input luefter
+  befehl_heizen: !input befehl_heizen
+  befehl_heizen_aus: !input befehl_heizen_aus
+  ir_konfiguration: !input ir_konfiguration
+  stufe_min: !input stufe_min
+  stufe_max: !input stufe_max
+  ein_ueber: !input ein_ueber
+  aus_unter: !input aus_unter
+  aussen_min: !input aussen_min
+  stufe_sehr_warm_ab: !input stufe_sehr_warm_ab
+  stufe_sehr_warm: !input stufe_sehr_warm
+  stufe_warm_ab: !input stufe_warm_ab
+  stufe_warm: !input stufe_warm
+  stufe_mild_ab: !input stufe_mild_ab
+  stufe_mild: !input stufe_mild
+  heizprofil: !input heizprofil
+  kuehl_profile: !input kuehl_profile
+  haus_heizung_aus: !input haus_heizung_aus
+  klima_modus: !input klima_modus
+  zieltemperatur: !input zieltemperatur
+  manuelle_stufe: !input manuelle_stufe
+  letzte_stufe: !input letzte_stufe
+  klima_aktiv: !input klima_aktiv
+  modus_vor_fenster: !input modus_vor_fenster
+  pv_aktiv: !input pv_aktiv
+  pv_automation: !input pv_automation
+  pv_heizfreigabe: !input pv_heizfreigabe
+  pv_heizbefehl: !input pv_heizbefehl
+  pv_auftrag: !input pv_auftrag
+  pv_verantwortung: !input pv_verantwortung
+  pv_freigabe: !input pv_freigabe
+  pv_status: !input pv_status
+  ausgabe_modus: !input ausgabe_modus
+  klima_steckdose: !input klima_steckdose
+  steckdose_halten: !input steckdose_halten
+  vorlauf_s: !input vorlauf_s
+  klima_leistung: !input klima_leistung
+  laeuft_ab_w: !input laeuft_ab_w
+  pruef_ein_min: !input pruef_ein_min
+  pruef_aus_min: !input pruef_aus_min
+  aussen: !input aussentemperatur
+  steckdose_ok: "{{ klima_steckdose is string and klima_steckdose != '' }}"
+  leistung_ok: "{{ klima_leistung is string and klima_leistung != '' }}"
+  produktiv: "{{ ausgabe_modus == 'produktiv' }}"
+  pv_ok: "{{ pv_aktiv and pv_heizbefehl is string and pv_heizbefehl != '' and pv_auftrag is string and pv_auftrag != '' and pv_freigabe is string and pv_freigabe != '' }}"
+  ir_cfg_text: "{{ ('v=1|s=' ~ klima_sender ~ '|g=' ~ ir_geraet ~ '|h=' ~ (befehl_heizen | replace('{luefter}', luefter)) ~ '|ha=' ~ (befehl_heizen_aus | replace('{luefter}', luefter)))[:255] }}"
+  normal_ids:
+    - "raumtemperatur"
+    - "aussentemperatur"
+    - "modus"
+    - "zieltemperatur"
+    - "klima_aktiv"
+    - "heizprofil"
+triggers:
+  - alias: "Nach dem Start von Home Assistant: vorherigen Klimazustand sicher wiederherstellen"
+    trigger: "homeassistant"
+    event: "start"
+    id: "ha_start"
+  - alias: "Nach dem Neuladen der Automationen: IR-Konfiguration veröffentlichen"
+    trigger: "event"
+    event_type: "automation_reloaded"
+    id: "reload"
+  - alias: "Raumtemperatur geändert"
+    trigger: "state"
+    entity_id: !input raumfuehler
+    id: "raumtemperatur"
+  - alias: "Außentemperatur geändert"
+    trigger: "state"
+    entity_id: !input aussentemperatur
+    id: "aussentemperatur"
+  - alias: "Klima-Modus geändert"
+    trigger: "state"
+    entity_id: !input klima_modus
+    id: "modus"
+  - alias: "Automatik-Zieltemperatur geändert"
+    trigger: "state"
+    entity_id: !input zieltemperatur
+    id: "zieltemperatur"
+  - alias: "Manuelle Stufe gewählt"
+    trigger: "state"
+    entity_id: !input manuelle_stufe
+    to: null
+    id: "manuell"
+  - alias: "Kühlbefehl-Helfer geändert"
+    trigger: "state"
+    entity_id: !input klima_aktiv
+    id: "klima_aktiv"
+  - alias: "Heizprofil der Raumheizung geändert"
+    trigger: "state"
+    entity_id: !input heizprofil
+    id: "heizprofil"
+  - alias: "Globaler Schalter „Heizung Aus“ geändert"
+    trigger: "state"
+    entity_id: !input haus_heizung_aus
+    id: "heizprofil"
+  - alias: "Ein Fenster ist seit der Pausenzeit offen"
+    trigger: "state"
+    entity_id: !input fensterkontakte
+    to: "on"
+    for:
+      minutes: !input fenster_minuten
+    id: "fenster_offen"
+  - alias: "Ein Fenster wurde geschlossen"
+    trigger: "state"
+    entity_id: !input fensterkontakte
+    from: "on"
+    to: "off"
+    id: "fenster_geschlossen"
+  - alias: "PV-Notrückgabe: minütliche Sicherheitsprüfung"
+    trigger: "time_pattern"
+    minutes: "/1"
+    id: "pv_pruefung"
+    enabled: !input pv_aktiv
+  - alias: "PV-Notrückgabe: PV-Automation ausgeschaltet"
+    trigger: "state"
+    entity_id: !input pv_automation
+    to: "off"
+    id: "pv_pruefung"
+    enabled: !input pv_aktiv
+  - alias: "Steckdose der Klimaanlage seit 1 Minute aus"
+    trigger: "state"
+    entity_id: !input klima_steckdose
+    to: "off"
+    for:
+      minutes: 1
+    id: "steckdose_aus"
+  - alias: "Rückmeldung: Kühlbefehl seit der Prüfzeit aktiv"
+    trigger: "state"
+    entity_id: !input klima_aktiv
+    to: "on"
+    for:
+      minutes: !input pruef_ein_min
+    id: "pruef_ein"
+  - alias: "Rückmeldung: Kühlbefehl seit der doppelten Prüfzeit aktiv (nach der Wiederholung)"
+    trigger: "state"
+    entity_id: !input klima_aktiv
+    to: "on"
+    for: "{{ '%02d:%02d:00' % ((pruef_ein_tv | int * 2) // 60, (pruef_ein_tv | int * 2) % 60) }}"
+    id: "pruef_ein2"
+  - alias: "Rückmeldung: Klimaanlage seit der Prüfzeit ausgeschaltet"
+    trigger: "state"
+    entity_id: !input klima_aktiv
+    to: "off"
+    for:
+      minutes: !input pruef_aus_min
+    id: "pruef_aus"
+  - alias: "Rückmeldung: Klimaanlage seit der doppelten Prüfzeit ausgeschaltet (nach der Wiederholung)"
+    trigger: "state"
+    entity_id: !input klima_aktiv
+    to: "off"
+    for: "{{ '%02d:%02d:00' % ((pruef_aus_tv | int * 2) // 60, (pruef_aus_tv | int * 2) % 60) }}"
+    id: "pruef_aus2"
+conditions: []
+actions:
+  - alias: "Gemeinsame IR-Konfiguration für das PV-Überschussheizen veröffentlichen"
+    if:
+      - alias: "Helfer vorhanden und Inhalt geändert"
+        condition: "template"
+        value_template: "{{ ir_konfiguration is string and ir_konfiguration != '' and states(ir_konfiguration) != ir_cfg_text }}"
+    then:
+      - alias: "IR-Konfiguration schreiben"
+        action: "input_text.set_value"
+        target:
+          entity_id: "{{ ir_konfiguration }}"
+        data:
+          value: "{{ ir_cfg_text }}"
+  - alias: "Aktuelle Werte lesen"
+    variables:
+      raum_temp: "{%- set s = states(raumfuehler) if raumfuehler.startswith('sensor.') else state_attr(raumfuehler, 'current_temperature') -%}{{ s | float(0) }}"
+      raum_gueltig: "{%- set s = states(raumfuehler) if raumfuehler.startswith('sensor.') else state_attr(raumfuehler, 'current_temperature') -%}{{ is_number(s) }}"
+      aussen_temp: "{{ states(aussen) | float(0) }}"
+      klima_ziel: "{{ states(zieltemperatur) | float(22) }}"
+      stufe_jetzt: "{{ states(letzte_stufe) | int(0) }}"
+      modus_jetzt: "{{ states(klima_modus) }}"
+      aktiv_jetzt: "{{ is_state(klima_aktiv, 'on') }}"
+      fenster_offen: "{{ fensterkontakte | select('is_state', 'on') | list | count > 0 }}"
+      haus_aus: "{{ haus_heizung_aus is string and haus_heizung_aus != '' and is_state(haus_heizung_aus, 'on') }}"
+      kuehl_profil_ok: "{{ states(heizprofil) in kuehl_profile or (haus_heizung_aus is string and haus_heizung_aus != '' and is_state(haus_heizung_aus, 'on')) }}"
+      gespeicherter_modus: "{% set s = states(modus_vor_fenster) %}{{ s.split('|')[0] if '|' in s else '' }}"
+      gespeichertes_ziel: "{% set s = states(modus_vor_fenster) %}{{ s.split('|')[2] | float(22) if '|' in s else states(zieltemperatur) | float(22) }}"
+      klima_erlaubt: "{{ (states(heizprofil) in kuehl_profile or (haus_heizung_aus is string and haus_heizung_aus != '' and is_state(haus_heizung_aus, 'on'))) and not (fensterkontakte | select('is_state', 'on') | list | count > 0) and states(aussen) | float(0) >= aussen_min | float }}"
+      ein_ab: "{{ states(zieltemperatur) | float(22) + ein_ueber | float }}"
+      aus_ab: "{{ states(zieltemperatur) | float(22) - aus_unter | float }}"
+      auto_stufe: "{%- set t = raum_temp | float -%}{%- set z = states(zieltemperatur) | float(22) -%}{%- set s = (stufe_sehr_warm if t > stufe_sehr_warm_ab | float else (stufe_warm if t > stufe_warm_ab | float else (stufe_mild if t >= stufe_mild_ab | float else z))) | int -%}{{ [[s, stufe_min | int] | max, stufe_max | int] | min }}"
+      leistung_gueltig: "{{ leistung_ok and is_number(states(klima_leistung)) }}"
+      laeuft: "{{ leistung_ok and states(klima_leistung) | float(0) >= laeuft_ab_w | float }}"
+      pv_belegt: "{{ pv_ok and (is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on') or pv_verantwortung | select('is_state', 'on') | list | count > 0) }}"
+      pv_notfall: "{{ pv_ok and (is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on')) and ((pv_automation is string and pv_automation != '' and is_state(pv_automation, 'off')) or (is_state(pv_freigabe, 'idle') and states[pv_freigabe] is not none and (now() - states[pv_freigabe].last_changed).total_seconds() >= 90)) }}"
+  - alias: "Sicherheitsabbruch bei ungültigen Pflichtsensoren (außer Neustart und PV-Prüfung)"
+    if:
+      - alias: "Raum- oder Außentemperatur ungültig"
+        condition: "template"
+        value_template: "{{ trigger.id not in ['ha_start', 'pv_pruefung', 'steckdose_aus', 'pruef_ein', 'pruef_ein2', 'pruef_aus', 'pruef_aus2'] and (not raum_gueltig or states(aussen) in ['unknown', 'unavailable', '']) }}"
+    then:
+      - alias: "Abbruch im Logbuch festhalten"
+        action: "logbook.log"
+        data:
+          name: "{{ raum_name }} Klima"
+          message: "Abgebrochen: Raum- oder Außentemperatur ist nicht verfügbar. Keine Moduswechsel, keine Einschaltung."
+          entity_id: "{{ klima_aktiv }}"
+      - alias: "Sicher beenden"
+        stop: "Pflichtsensoren ungültig"
+  - alias: "Erstwiederherstellung eines Helfers nach dem Neustart ist keine echte Änderung"
+    if:
+      - alias: "Trigger ohne Vorzustand"
+        condition: "template"
+        value_template: "{{ trigger.id not in ['ha_start', 'pv_pruefung'] and trigger.from_state is none }}"
+    then:
+      - alias: "Sicher beenden"
+        stop: "Erstwiederherstellung eines Helfers"
+  - alias: "Entscheidung genau einmal bestimmen (Reihenfolge wie im Bestand)"
+    variables:
+      entscheidung: >-
+        {%- set normal = trigger.id in normal_ids and trigger.from_state is not none -%}
+        {%- if trigger.id == 'ha_start' -%}neustart
+        {%- elif trigger.id == 'pv_pruefung' -%}{{ 'pv_rueckgabe' if pv_notfall else 'keine' }}
+        {%- elif trigger.id == 'steckdose_aus' -%}{{ 'steckdose_ein' if steckdose_ok and steckdose_halten and is_state(klima_steckdose, 'off') else 'keine' }}
+        {%- elif trigger.id in ['pruef_ein', 'pruef_ein2'] -%}
+        {%- if not (leistung_gueltig and aktiv_jetzt and stufe_jetzt > 0 and not pv_belegt) -%}keine
+        {%- elif laeuft -%}{{ 'rueckmeldung_ok' if trigger.id == 'pruef_ein2' else 'keine' }}
+        {%- else -%}{{ 'nachsenden_ein' if trigger.id == 'pruef_ein' else 'fehler_ein' }}{%- endif -%}
+        {%- elif trigger.id in ['pruef_aus', 'pruef_aus2'] -%}
+        {%- if not (leistung_gueltig and not aktiv_jetzt and not pv_belegt) -%}keine
+        {%- elif not laeuft -%}{{ 'rueckmeldung_ok' if trigger.id == 'pruef_aus2' else 'keine' }}
+        {%- else -%}{{ 'nachsenden_aus' if trigger.id == 'pruef_aus' else 'fehler_aus' }}{%- endif -%}
+        {%- elif trigger.id == 'fenster_offen' and modus_jetzt != 'Aus' -%}fenster_pause
+        {%- elif trigger.id == 'fenster_geschlossen' and not fenster_offen and kuehl_profil_ok and aussen_temp >= aussen_min | float and gespeicherter_modus == 'Automatik Kühlen' -%}fenster_wiederherstellen
+        {%- elif trigger.id == 'modus' and normal and modus_jetzt == 'Aus' and (aktiv_jetzt or stufe_jetzt > 0) -%}aus
+        {%- elif normal and not fenster_offen and not klima_erlaubt and modus_jetzt != 'Aus' -%}sperre_aus
+        {%- elif trigger.id == 'manuell' and trigger.from_state is not none and is_number(trigger.to_state.state) and klima_erlaubt -%}manuell
+        {%- elif normal and klima_erlaubt and modus_jetzt == 'Automatik Kühlen' and raum_temp >= ein_ab and (not aktiv_jetzt or stufe_jetzt != (auto_stufe | int)) -%}kuehlen_ein
+        {%- elif normal and klima_erlaubt and modus_jetzt == 'Automatik Kühlen' and aktiv_jetzt and raum_temp <= aus_ab -%}kuehlen_aus
+        {%- else -%}keine{%- endif -%}
+  - alias: "Nichts zu tun"
+    condition: "template"
+    value_template: "{{ entscheidung != 'keine' }}"
+  - alias: "Testbetrieb: Entscheidung nur protokollieren"
+    if:
+      - alias: "Testbetrieb und kein Neustartfall"
+        condition: "template"
+        value_template: "{{ not produktiv and entscheidung != 'neustart' }}"
+    then:
+      - alias: "Geplante Aktion ins Logbuch"
+        action: "logbook.log"
+        data:
+          name: "{{ raum_name }} Klima (Test)"
+          message: "Geplant: {{ entscheidung }} · Raum {{ raum_temp }} °C · Ziel {{ klima_ziel }} · Stufe {{ auto_stufe }} · Modus {{ modus_jetzt }}"
+          entity_id: "{{ klima_aktiv }}"
+      - alias: "Testlauf beenden"
+        stop: "Testbetrieb"
+  - alias: "Entscheidung ausführen"
+    choose:
+      - alias: "Neustart: nur wiederherstellen, wenn die Klimaanlage vorher aktiv war"
+        conditions:
+          - alias: "Neustart"
+            condition: "template"
+            value_template: "{{ entscheidung == 'neustart' }}"
+        sequence:
+          - alias: "Steckdose nach dem Neustart einschalten, falls sie aus ist (dauerhaft eingeschaltet halten)"
+            if:
+              - alias: "Steckdose eingerichtet, halten gewünscht und aus"
+                condition: "template"
+                value_template: "{{ steckdose_ok and steckdose_halten and is_state(klima_steckdose, 'off') and produktiv }}"
+            then:
+              - alias: "Steckdose einschalten"
+                action: "switch.turn_on"
+                target:
+                  entity_id: "{{ klima_steckdose }}"
+                continue_on_error: true
+          - alias: "Höchstens 2:30 min auf gültige Pflichtdaten warten"
+            wait_template: "{%- set s = states(raumfuehler) if raumfuehler.startswith('sensor.') else state_attr(raumfuehler, 'current_temperature') -%}{{ is_number(s) and states(aussen) not in ['unknown', 'unavailable', ''] and fensterkontakte | reject('is_state', 'on') | reject('is_state', 'off') | list | count == 0 and states(heizprofil) not in ['unknown', 'unavailable'] and states(klima_modus) not in ['unknown', 'unavailable'] and states(klima_aktiv) not in ['unknown', 'unavailable'] and states(zieltemperatur) not in ['unknown', 'unavailable'] }}"
+            timeout:
+              minutes: 2
+              seconds: 30
+            continue_on_timeout: true
+          - alias: "Wurden gültige Daten erreicht?"
+            if:
+              - alias: "Warten erfolgreich"
+                condition: "template"
+                value_template: "{{ wait.completed }}"
+            then:
+              - alias: "Zustand vor dem Neustart auswerten"
+                choose:
+                  - alias: "Klimaanlage war vorher aus"
+                    conditions:
+                      - alias: "Kühlbefehl-Helfer aus"
+                        condition: "template"
+                        value_template: "{{ is_state(klima_aktiv, 'off') }}"
+                    sequence:
+                      - alias: "Kein IR-Befehl – im Logbuch vermerken"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima Neustart"
+                          message: "Klimaanlage war vor dem Neustart aus. Kein IR-Befehl."
+                          entity_id: "{{ klima_aktiv }}"
+                  - alias: "Klimaanlage war vorher an"
+                    conditions:
+                      - alias: "Kühlbefehl-Helfer an"
+                        condition: "template"
+                        value_template: "{{ is_state(klima_aktiv, 'on') }}"
+                    sequence:
+                      - alias: "Frische Werte nach dem Neustart"
+                        variables:
+                          r_raum: "{%- set s = states(raumfuehler) if raumfuehler.startswith('sensor.') else state_attr(raumfuehler, 'current_temperature') -%}{{ s | float(0) }}"
+                          r_erlaubt: "{{ (states(heizprofil) in kuehl_profile or (haus_heizung_aus is string and haus_heizung_aus != '' and is_state(haus_heizung_aus, 'on'))) and not (fensterkontakte | select('is_state', 'on') | list | count > 0) and states(aussen) | float(0) >= aussen_min | float }}"
+                          r_stufe: "{%- set l = states(letzte_stufe) | int(0) -%}{%- set t = states(raumfuehler) | float(0) if raumfuehler.startswith('sensor.') else state_attr(raumfuehler, 'current_temperature') | float(0) -%}{{ l if l > 0 else (17 if t > 24 else 18 if t > 23 else 20 if t >= 22 else 21) }}"
+                      - alias: "Wiederherstellen oder blockieren"
+                        choose:
+                          - alias: "Sicherheitsbedingungen erlauben die Wiederherstellung"
+                            conditions:
+                              - alias: "Kühlen erlaubt"
+                                condition: "template"
+                                value_template: "{{ r_erlaubt }}"
+                            sequence:
+                              - alias: "Testbetrieb oder Normalbetrieb"
+                                if:
+                                  - alias: "Normalbetrieb"
+                                    condition: "template"
+                                    value_template: "{{ produktiv }}"
+                                then:
+                                  - alias: "Bedienung hat Vorrang: laufendes PV-Heizen zuerst beenden"
+                                    if:
+                                      - alias: "PV-Heizen in diesem Raum freigegeben oder aktiv"
+                                        condition: "template"
+                                        value_template: "{{ pv_ok and (is_state(pv_heizfreigabe, 'on') or is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on') or pv_verantwortung | select('is_state', 'on') | list | count > 0) }}"
+                                    then:
+                                      - alias: "PV-Heizfreigabe ausschalten (die PV-Automation beendet daraufhin ihre Sitzung)"
+                                        action: "input_boolean.turn_off"
+                                        target:
+                                          entity_id: "{{ pv_heizfreigabe }}"
+                                      - alias: "Höchstens 30 s auf die Rückgabe durch die PV-Automation warten"
+                                        wait_template: "{{ is_state(pv_heizbefehl, 'off') and is_state(pv_auftrag, 'off') and pv_verantwortung | select('is_state', 'on') | list | count == 0 }}"
+                                        timeout:
+                                          seconds: 30
+                                  - alias: "Kühlbefehl mit Stufe senden (nur bei erreichbarem IR-Sender)"
+                                    sequence:
+                                      - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                                        if:
+                                          - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                                            condition: "template"
+                                            value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                                        then:
+                                          - alias: "Steckdose einschalten"
+                                            action: "switch.turn_on"
+                                            target:
+                                              entity_id: "{{ klima_steckdose }}"
+                                            continue_on_error: true
+                                          - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                                            wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                                            timeout:
+                                              seconds: 20
+                                          - alias: "Steckdose meldet nicht „an“?"
+                                            if:
+                                              - alias: "Steckdose nicht eingeschaltet"
+                                                condition: "template"
+                                                value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                                            then:
+                                              - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                                                action: "persistent_notification.create"
+                                                data:
+                                                  notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                                                  title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                                                  message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                                              - alias: "Im Logbuch festhalten"
+                                                action: "logbook.log"
+                                                data:
+                                                  name: "{{ raum_name }} Klima"
+                                                  message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                                                  entity_id: "{{ klima_aktiv }}"
+                                              - alias: "Lauf mit Fehler beenden"
+                                                stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                                                error: true
+                                          - alias: "Im Logbuch festhalten"
+                                            action: "logbook.log"
+                                            data:
+                                              name: "{{ raum_name }} Klima"
+                                              message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                                              entity_id: "{{ klima_aktiv }}"
+                                          - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                                            delay:
+                                              seconds: "{{ vorlauf_s | int }}"
+                                      - alias: "IR-Sender prüfen"
+                                        if:
+                                          - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                                            condition: "template"
+                                            value_template: "{{ not is_state(klima_sender, 'on') }}"
+                                        then:
+                                          - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                                            action: "persistent_notification.create"
+                                            data:
+                                              notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                                              title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                                              message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                                          - alias: "Im Logbuch festhalten"
+                                            action: "logbook.log"
+                                            data:
+                                              name: "{{ raum_name }} Klima"
+                                              message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                                              entity_id: "{{ klima_aktiv }}"
+                                          - alias: "Lauf mit Fehler beenden"
+                                            stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                                            error: true
+                                      - alias: "Kühlbefehl mit Stufe senden"
+                                        action: "remote.send_command"
+                                        target:
+                                          entity_id: "{{ klima_sender }}"
+                                        data:
+                                          device: "{{ ir_geraet }}"
+                                          command: "{{ befehl_kuehlen | replace('{stufe}', (r_stufe | int) | string) | replace('{luefter}', luefter) }}"
+                                  - alias: "Zusatzbefehle nacheinander senden, falls eingerichtet (mehrere durch Komma getrennt, z. B. eco_{stufe}, display_off)"
+                                    repeat:
+                                      for_each: "{{ (befehl_kuehlen_zusatz | string).split(',') | map('trim') | reject('eq', '') | list }}"
+                                      sequence:
+                                        - alias: "1 s Abstand zwischen IR-Befehlen"
+                                          delay:
+                                            seconds: 1
+                                        - alias: "Zusatzbefehl mit Stufe senden (nur bei erreichbarem IR-Sender)"
+                                          sequence:
+                                            - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                                              if:
+                                                - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                                                  condition: "template"
+                                                  value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                                              then:
+                                                - alias: "Steckdose einschalten"
+                                                  action: "switch.turn_on"
+                                                  target:
+                                                    entity_id: "{{ klima_steckdose }}"
+                                                  continue_on_error: true
+                                                - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                                                  wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                                                  timeout:
+                                                    seconds: 20
+                                                - alias: "Steckdose meldet nicht „an“?"
+                                                  if:
+                                                    - alias: "Steckdose nicht eingeschaltet"
+                                                      condition: "template"
+                                                      value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                                                  then:
+                                                    - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                                                      action: "persistent_notification.create"
+                                                      data:
+                                                        notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                                                        title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                                                        message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                                                    - alias: "Im Logbuch festhalten"
+                                                      action: "logbook.log"
+                                                      data:
+                                                        name: "{{ raum_name }} Klima"
+                                                        message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                                                        entity_id: "{{ klima_aktiv }}"
+                                                    - alias: "Lauf mit Fehler beenden"
+                                                      stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                                                      error: true
+                                                - alias: "Im Logbuch festhalten"
+                                                  action: "logbook.log"
+                                                  data:
+                                                    name: "{{ raum_name }} Klima"
+                                                    message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                                                    entity_id: "{{ klima_aktiv }}"
+                                                - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                                                  delay:
+                                                    seconds: "{{ vorlauf_s | int }}"
+                                            - alias: "IR-Sender prüfen"
+                                              if:
+                                                - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                                                  condition: "template"
+                                                  value_template: "{{ not is_state(klima_sender, 'on') }}"
+                                              then:
+                                                - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                                                  action: "persistent_notification.create"
+                                                  data:
+                                                    notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                                                    title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                                                    message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                                                - alias: "Im Logbuch festhalten"
+                                                  action: "logbook.log"
+                                                  data:
+                                                    name: "{{ raum_name }} Klima"
+                                                    message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                                                    entity_id: "{{ klima_aktiv }}"
+                                                - alias: "Lauf mit Fehler beenden"
+                                                  stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                                                  error: true
+                                            - alias: "Zusatzbefehl mit Stufe senden"
+                                              action: "remote.send_command"
+                                              target:
+                                                entity_id: "{{ klima_sender }}"
+                                              data:
+                                                device: "{{ ir_geraet }}"
+                                                command: "{{ repeat.item | replace('{stufe}', (r_stufe | int) | string) | replace('{luefter}', luefter) }}"
+                                  - alias: "Gesendete Stufe merken"
+                                    action: "input_number.set_value"
+                                    target:
+                                      entity_id: "{{ letzte_stufe }}"
+                                    data:
+                                      value: "{{ r_stufe | int }}"
+                                  - alias: "Wiederherstellung im Logbuch"
+                                    action: "logbook.log"
+                                    data:
+                                      name: "{{ raum_name }} Klima Neustart"
+                                      message: "Klimaanlage war aktiv – mit Stufe {{ r_stufe }} °C wiederhergestellt."
+                                      entity_id: "{{ klima_aktiv }}"
+                                else:
+                                  - alias: "Testbetrieb: nur protokollieren"
+                                    action: "logbook.log"
+                                    data:
+                                      name: "{{ raum_name }} Klima (Test)"
+                                      message: "Geplant: Neustart-Wiederherstellung mit Stufe {{ r_stufe }}"
+                                      entity_id: "{{ klima_aktiv }}"
+                        default:
+                          - alias: "Blockierte Wiederherstellung im Logbuch"
+                            action: "logbook.log"
+                            data:
+                              name: "{{ raum_name }} Klima Neustart"
+                              message: "Wiederherstellung blockiert (Profil {{ states(heizprofil) }}, Außen {{ states(aussen) }} °C, Fenster/Erlaubnis nicht erfüllt)."
+                              entity_id: "{{ klima_aktiv }}"
+            else:
+              - alias: "Zeitüberschreitung im Logbuch"
+                action: "logbook.log"
+                data:
+                  name: "{{ raum_name }} Klima Neustart"
+                  message: "Sensordaten nach 2,5 Minuten nicht gültig – kein Einschaltbefehl."
+                  entity_id: "{{ klima_aktiv }}"
+      - alias: "Fenster offen: Zustand merken und Klimaanlage pausieren"
+        conditions:
+          - alias: "Fensterpause"
+            condition: "template"
+            value_template: "{{ entscheidung == 'fenster_pause' }}"
+        sequence:
+          - alias: "Modus, Stufe und Ziel merken"
+            action: "input_text.set_value"
+            target:
+              entity_id: "{{ modus_vor_fenster }}"
+            data:
+              value: "{{ modus_jetzt }}|{{ stufe_jetzt }}|{{ klima_ziel }}"
+          - alias: "Bedienung hat Vorrang: laufendes PV-Heizen zuerst beenden"
+            if:
+              - alias: "PV-Heizen in diesem Raum freigegeben oder aktiv"
+                condition: "template"
+                value_template: "{{ pv_ok and (is_state(pv_heizfreigabe, 'on') or is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on')) }}"
+            then:
+              - alias: "PV-Heizfreigabe ausschalten"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ pv_heizfreigabe }}"
+              - alias: "Höchstens 30 s auf die PV-Rückgabe warten"
+                wait_template: "{{ is_state(pv_heizbefehl, 'off') and is_state(pv_auftrag, 'off') }}"
+                timeout:
+                  seconds: 30
+          - alias: "Klimaanlage per IR ausschalten (nur bei erreichbarem IR-Sender)"
+            sequence:
+              - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                if:
+                  - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                    condition: "template"
+                    value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                then:
+                  - alias: "Steckdose einschalten"
+                    action: "switch.turn_on"
+                    target:
+                      entity_id: "{{ klima_steckdose }}"
+                    continue_on_error: true
+                  - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                    wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                    timeout:
+                      seconds: 20
+                  - alias: "Steckdose meldet nicht „an“?"
+                    if:
+                      - alias: "Steckdose nicht eingeschaltet"
+                        condition: "template"
+                        value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                    then:
+                      - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                        action: "persistent_notification.create"
+                        data:
+                          notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                          title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                          message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Lauf mit Fehler beenden"
+                        stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                        error: true
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                    delay:
+                      seconds: "{{ vorlauf_s | int }}"
+              - alias: "IR-Sender prüfen"
+                if:
+                  - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                    condition: "template"
+                    value_template: "{{ not is_state(klima_sender, 'on') }}"
+                then:
+                  - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                    action: "persistent_notification.create"
+                    data:
+                      notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                      title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                      message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Lauf mit Fehler beenden"
+                    stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                    error: true
+              - alias: "Klimaanlage per IR ausschalten"
+                action: "remote.send_command"
+                target:
+                  entity_id: "{{ klima_sender }}"
+                data:
+                  device: "{{ ir_geraet }}"
+                  command: "{{ befehl_aus | replace('{luefter}', luefter) }}"
+          - alias: "Kühlbefehl als inaktiv markieren"
+            action: "input_boolean.turn_off"
+            target:
+              entity_id: "{{ klima_aktiv }}"
+          - alias: "Letzte Stufe zurücksetzen"
+            action: "input_number.set_value"
+            target:
+              entity_id: "{{ letzte_stufe }}"
+            data:
+              value: 0
+      - alias: "Fenster geschlossen: Automatik wiederherstellen"
+        conditions:
+          - alias: "Wiederherstellung"
+            condition: "template"
+            value_template: "{{ entscheidung == 'fenster_wiederherstellen' }}"
+        sequence:
+          - alias: "Gemerktes Ziel setzen"
+            action: "input_number.set_value"
+            target:
+              entity_id: "{{ zieltemperatur }}"
+            data:
+              value: "{{ gespeichertes_ziel }}"
+          - alias: "Automatik Kühlen wählen"
+            action: "input_select.select_option"
+            target:
+              entity_id: "{{ klima_modus }}"
+            data:
+              option: "Automatik Kühlen"
+          - alias: "Kühlbefehl inaktiv"
+            action: "input_boolean.turn_off"
+            target:
+              entity_id: "{{ klima_aktiv }}"
+          - alias: "Letzte Stufe zurücksetzen"
+            action: "input_number.set_value"
+            target:
+              entity_id: "{{ letzte_stufe }}"
+            data:
+              value: 0
+          - alias: "Merker leeren"
+            action: "input_text.set_value"
+            target:
+              entity_id: "{{ modus_vor_fenster }}"
+            data:
+              value: ""
+          - alias: "2 s warten"
+            delay:
+              seconds: 2
+          - alias: "Sofort weiterkühlen, wenn der Raum zu warm ist"
+            if:
+              - alias: "Raum über Einschaltschwelle"
+                condition: "template"
+                value_template: "{{ raum_temp >= gespeichertes_ziel + ein_ueber | float }}"
+            then:
+              - alias: "Bedienung hat Vorrang: laufendes PV-Heizen zuerst beenden"
+                if:
+                  - alias: "PV-Heizen in diesem Raum freigegeben oder aktiv"
+                    condition: "template"
+                    value_template: "{{ pv_ok and (is_state(pv_heizfreigabe, 'on') or is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on') or pv_verantwortung | select('is_state', 'on') | list | count > 0) }}"
+                then:
+                  - alias: "PV-Heizfreigabe ausschalten (die PV-Automation beendet daraufhin ihre Sitzung)"
+                    action: "input_boolean.turn_off"
+                    target:
+                      entity_id: "{{ pv_heizfreigabe }}"
+                  - alias: "Höchstens 30 s auf die Rückgabe durch die PV-Automation warten"
+                    wait_template: "{{ is_state(pv_heizbefehl, 'off') and is_state(pv_auftrag, 'off') and pv_verantwortung | select('is_state', 'on') | list | count == 0 }}"
+                    timeout:
+                      seconds: 30
+              - alias: "Kühlbefehl mit Stufe senden (nur bei erreichbarem IR-Sender)"
+                sequence:
+                  - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                    if:
+                      - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                        condition: "template"
+                        value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                    then:
+                      - alias: "Steckdose einschalten"
+                        action: "switch.turn_on"
+                        target:
+                          entity_id: "{{ klima_steckdose }}"
+                        continue_on_error: true
+                      - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                        wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                        timeout:
+                          seconds: 20
+                      - alias: "Steckdose meldet nicht „an“?"
+                        if:
+                          - alias: "Steckdose nicht eingeschaltet"
+                            condition: "template"
+                            value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                        then:
+                          - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                            action: "persistent_notification.create"
+                            data:
+                              notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                              title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                              message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                          - alias: "Im Logbuch festhalten"
+                            action: "logbook.log"
+                            data:
+                              name: "{{ raum_name }} Klima"
+                              message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                              entity_id: "{{ klima_aktiv }}"
+                          - alias: "Lauf mit Fehler beenden"
+                            stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                            error: true
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                        delay:
+                          seconds: "{{ vorlauf_s | int }}"
+                  - alias: "IR-Sender prüfen"
+                    if:
+                      - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                        condition: "template"
+                        value_template: "{{ not is_state(klima_sender, 'on') }}"
+                    then:
+                      - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                        action: "persistent_notification.create"
+                        data:
+                          notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                          title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                          message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Lauf mit Fehler beenden"
+                        stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                        error: true
+                  - alias: "Kühlbefehl mit Stufe senden"
+                    action: "remote.send_command"
+                    target:
+                      entity_id: "{{ klima_sender }}"
+                    data:
+                      device: "{{ ir_geraet }}"
+                      command: "{{ befehl_kuehlen | replace('{stufe}', (auto_stufe | int) | string) | replace('{luefter}', luefter) }}"
+              - alias: "Zusatzbefehle nacheinander senden, falls eingerichtet (mehrere durch Komma getrennt, z. B. eco_{stufe}, display_off)"
+                repeat:
+                  for_each: "{{ (befehl_kuehlen_zusatz | string).split(',') | map('trim') | reject('eq', '') | list }}"
+                  sequence:
+                    - alias: "1 s Abstand zwischen IR-Befehlen"
+                      delay:
+                        seconds: 1
+                    - alias: "Zusatzbefehl mit Stufe senden (nur bei erreichbarem IR-Sender)"
+                      sequence:
+                        - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                          if:
+                            - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                              condition: "template"
+                              value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                          then:
+                            - alias: "Steckdose einschalten"
+                              action: "switch.turn_on"
+                              target:
+                                entity_id: "{{ klima_steckdose }}"
+                              continue_on_error: true
+                            - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                              wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                              timeout:
+                                seconds: 20
+                            - alias: "Steckdose meldet nicht „an“?"
+                              if:
+                                - alias: "Steckdose nicht eingeschaltet"
+                                  condition: "template"
+                                  value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                              then:
+                                - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                                  action: "persistent_notification.create"
+                                  data:
+                                    notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                                    title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                                    message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                                - alias: "Im Logbuch festhalten"
+                                  action: "logbook.log"
+                                  data:
+                                    name: "{{ raum_name }} Klima"
+                                    message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                                    entity_id: "{{ klima_aktiv }}"
+                                - alias: "Lauf mit Fehler beenden"
+                                  stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                                  error: true
+                            - alias: "Im Logbuch festhalten"
+                              action: "logbook.log"
+                              data:
+                                name: "{{ raum_name }} Klima"
+                                message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                                entity_id: "{{ klima_aktiv }}"
+                            - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                              delay:
+                                seconds: "{{ vorlauf_s | int }}"
+                        - alias: "IR-Sender prüfen"
+                          if:
+                            - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                              condition: "template"
+                              value_template: "{{ not is_state(klima_sender, 'on') }}"
+                          then:
+                            - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                              action: "persistent_notification.create"
+                              data:
+                                notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                                title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                                message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                            - alias: "Im Logbuch festhalten"
+                              action: "logbook.log"
+                              data:
+                                name: "{{ raum_name }} Klima"
+                                message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                                entity_id: "{{ klima_aktiv }}"
+                            - alias: "Lauf mit Fehler beenden"
+                              stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                              error: true
+                        - alias: "Zusatzbefehl mit Stufe senden"
+                          action: "remote.send_command"
+                          target:
+                            entity_id: "{{ klima_sender }}"
+                          data:
+                            device: "{{ ir_geraet }}"
+                            command: "{{ repeat.item | replace('{stufe}', (auto_stufe | int) | string) | replace('{luefter}', luefter) }}"
+              - alias: "Gesendete Stufe merken"
+                action: "input_number.set_value"
+                target:
+                  entity_id: "{{ letzte_stufe }}"
+                data:
+                  value: "{{ auto_stufe | int }}"
+              - alias: "Kühlbefehl aktiv"
+                action: "input_boolean.turn_on"
+                target:
+                  entity_id: "{{ klima_aktiv }}"
+      - alias: "Klima-Modus auf Aus gestellt: Klimaanlage ausschalten"
+        conditions:
+          - alias: "Aus"
+            condition: "template"
+            value_template: "{{ entscheidung == 'aus' }}"
+        sequence:
+          - alias: "Bedienung hat Vorrang: laufendes PV-Heizen zuerst beenden"
+            if:
+              - alias: "PV-Heizen in diesem Raum freigegeben oder aktiv"
+                condition: "template"
+                value_template: "{{ pv_ok and (is_state(pv_heizfreigabe, 'on') or is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on')) }}"
+            then:
+              - alias: "PV-Heizfreigabe ausschalten"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ pv_heizfreigabe }}"
+              - alias: "Höchstens 30 s auf die PV-Rückgabe warten"
+                wait_template: "{{ is_state(pv_heizbefehl, 'off') and is_state(pv_auftrag, 'off') }}"
+                timeout:
+                  seconds: 30
+          - alias: "Klimaanlage per IR ausschalten (nur bei erreichbarem IR-Sender)"
+            sequence:
+              - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                if:
+                  - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                    condition: "template"
+                    value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                then:
+                  - alias: "Steckdose einschalten"
+                    action: "switch.turn_on"
+                    target:
+                      entity_id: "{{ klima_steckdose }}"
+                    continue_on_error: true
+                  - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                    wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                    timeout:
+                      seconds: 20
+                  - alias: "Steckdose meldet nicht „an“?"
+                    if:
+                      - alias: "Steckdose nicht eingeschaltet"
+                        condition: "template"
+                        value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                    then:
+                      - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                        action: "persistent_notification.create"
+                        data:
+                          notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                          title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                          message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Lauf mit Fehler beenden"
+                        stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                        error: true
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                    delay:
+                      seconds: "{{ vorlauf_s | int }}"
+              - alias: "IR-Sender prüfen"
+                if:
+                  - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                    condition: "template"
+                    value_template: "{{ not is_state(klima_sender, 'on') }}"
+                then:
+                  - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                    action: "persistent_notification.create"
+                    data:
+                      notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                      title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                      message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Lauf mit Fehler beenden"
+                    stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                    error: true
+              - alias: "Klimaanlage per IR ausschalten"
+                action: "remote.send_command"
+                target:
+                  entity_id: "{{ klima_sender }}"
+                data:
+                  device: "{{ ir_geraet }}"
+                  command: "{{ befehl_aus | replace('{luefter}', luefter) }}"
+          - alias: "Letzte Stufe zurücksetzen"
+            action: "input_number.set_value"
+            target:
+              entity_id: "{{ letzte_stufe }}"
+            data:
+              value: 0
+          - alias: "Kühlbefehl inaktiv"
+            action: "input_boolean.turn_off"
+            target:
+              entity_id: "{{ klima_aktiv }}"
+          - alias: "Fenstermerker leeren"
+            action: "input_text.set_value"
+            target:
+              entity_id: "{{ modus_vor_fenster }}"
+            data:
+              value: ""
+      - alias: "Kühlen nicht mehr erlaubt (Heizprofil, Außentemperatur): ausschalten"
+        conditions:
+          - alias: "Sperre"
+            condition: "template"
+            value_template: "{{ entscheidung == 'sperre_aus' }}"
+        sequence:
+          - alias: "Fenstermerker leeren"
+            action: "input_text.set_value"
+            target:
+              entity_id: "{{ modus_vor_fenster }}"
+            data:
+              value: ""
+          - alias: "Bedienung hat Vorrang: laufendes PV-Heizen zuerst beenden"
+            if:
+              - alias: "PV-Heizen in diesem Raum freigegeben oder aktiv"
+                condition: "template"
+                value_template: "{{ pv_ok and (is_state(pv_heizfreigabe, 'on') or is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on')) }}"
+            then:
+              - alias: "PV-Heizfreigabe ausschalten"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ pv_heizfreigabe }}"
+              - alias: "Höchstens 30 s auf die PV-Rückgabe warten"
+                wait_template: "{{ is_state(pv_heizbefehl, 'off') and is_state(pv_auftrag, 'off') }}"
+                timeout:
+                  seconds: 30
+          - alias: "Klimaanlage per IR ausschalten (nur bei erreichbarem IR-Sender)"
+            sequence:
+              - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                if:
+                  - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                    condition: "template"
+                    value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                then:
+                  - alias: "Steckdose einschalten"
+                    action: "switch.turn_on"
+                    target:
+                      entity_id: "{{ klima_steckdose }}"
+                    continue_on_error: true
+                  - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                    wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                    timeout:
+                      seconds: 20
+                  - alias: "Steckdose meldet nicht „an“?"
+                    if:
+                      - alias: "Steckdose nicht eingeschaltet"
+                        condition: "template"
+                        value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                    then:
+                      - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                        action: "persistent_notification.create"
+                        data:
+                          notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                          title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                          message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Lauf mit Fehler beenden"
+                        stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                        error: true
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                    delay:
+                      seconds: "{{ vorlauf_s | int }}"
+              - alias: "IR-Sender prüfen"
+                if:
+                  - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                    condition: "template"
+                    value_template: "{{ not is_state(klima_sender, 'on') }}"
+                then:
+                  - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                    action: "persistent_notification.create"
+                    data:
+                      notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                      title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                      message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Lauf mit Fehler beenden"
+                    stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                    error: true
+              - alias: "Klimaanlage per IR ausschalten"
+                action: "remote.send_command"
+                target:
+                  entity_id: "{{ klima_sender }}"
+                data:
+                  device: "{{ ir_geraet }}"
+                  command: "{{ befehl_aus | replace('{luefter}', luefter) }}"
+          - alias: "1 s warten"
+            delay:
+              seconds: 1
+          - alias: "Letzte Stufe zurücksetzen"
+            action: "input_number.set_value"
+            target:
+              entity_id: "{{ letzte_stufe }}"
+            data:
+              value: 0
+          - alias: "Klima-Modus auf Aus"
+            action: "input_select.select_option"
+            target:
+              entity_id: "{{ klima_modus }}"
+            data:
+              option: "Aus"
+          - alias: "Kühlbefehl inaktiv"
+            action: "input_boolean.turn_off"
+            target:
+              entity_id: "{{ klima_aktiv }}"
+      - alias: "Manuelle Stufe senden"
+        conditions:
+          - alias: "Manuell"
+            condition: "template"
+            value_template: "{{ entscheidung == 'manuell' }}"
+        sequence:
+          - alias: "Gewählte Stufe bestimmen"
+            variables:
+              m_stufe: "{{ [[states(manuelle_stufe) | int(20), stufe_min | int] | max, stufe_max | int] | min }}"
+          - alias: "Bedienung hat Vorrang: laufendes PV-Heizen zuerst beenden"
+            if:
+              - alias: "PV-Heizen in diesem Raum freigegeben oder aktiv"
+                condition: "template"
+                value_template: "{{ pv_ok and (is_state(pv_heizfreigabe, 'on') or is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on') or pv_verantwortung | select('is_state', 'on') | list | count > 0) }}"
+            then:
+              - alias: "PV-Heizfreigabe ausschalten (die PV-Automation beendet daraufhin ihre Sitzung)"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ pv_heizfreigabe }}"
+              - alias: "Höchstens 30 s auf die Rückgabe durch die PV-Automation warten"
+                wait_template: "{{ is_state(pv_heizbefehl, 'off') and is_state(pv_auftrag, 'off') and pv_verantwortung | select('is_state', 'on') | list | count == 0 }}"
+                timeout:
+                  seconds: 30
+          - alias: "Kühlbefehl mit Stufe senden (nur bei erreichbarem IR-Sender)"
+            sequence:
+              - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                if:
+                  - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                    condition: "template"
+                    value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                then:
+                  - alias: "Steckdose einschalten"
+                    action: "switch.turn_on"
+                    target:
+                      entity_id: "{{ klima_steckdose }}"
+                    continue_on_error: true
+                  - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                    wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                    timeout:
+                      seconds: 20
+                  - alias: "Steckdose meldet nicht „an“?"
+                    if:
+                      - alias: "Steckdose nicht eingeschaltet"
+                        condition: "template"
+                        value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                    then:
+                      - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                        action: "persistent_notification.create"
+                        data:
+                          notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                          title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                          message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Lauf mit Fehler beenden"
+                        stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                        error: true
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                    delay:
+                      seconds: "{{ vorlauf_s | int }}"
+              - alias: "IR-Sender prüfen"
+                if:
+                  - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                    condition: "template"
+                    value_template: "{{ not is_state(klima_sender, 'on') }}"
+                then:
+                  - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                    action: "persistent_notification.create"
+                    data:
+                      notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                      title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                      message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Lauf mit Fehler beenden"
+                    stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                    error: true
+              - alias: "Kühlbefehl mit Stufe senden"
+                action: "remote.send_command"
+                target:
+                  entity_id: "{{ klima_sender }}"
+                data:
+                  device: "{{ ir_geraet }}"
+                  command: "{{ befehl_kuehlen | replace('{stufe}', (m_stufe | int) | string) | replace('{luefter}', luefter) }}"
+          - alias: "Zusatzbefehle nacheinander senden, falls eingerichtet (mehrere durch Komma getrennt, z. B. eco_{stufe}, display_off)"
+            repeat:
+              for_each: "{{ (befehl_kuehlen_zusatz | string).split(',') | map('trim') | reject('eq', '') | list }}"
+              sequence:
+                - alias: "1 s Abstand zwischen IR-Befehlen"
+                  delay:
+                    seconds: 1
+                - alias: "Zusatzbefehl mit Stufe senden (nur bei erreichbarem IR-Sender)"
+                  sequence:
+                    - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                      if:
+                        - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                          condition: "template"
+                          value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                      then:
+                        - alias: "Steckdose einschalten"
+                          action: "switch.turn_on"
+                          target:
+                            entity_id: "{{ klima_steckdose }}"
+                          continue_on_error: true
+                        - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                          wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                          timeout:
+                            seconds: 20
+                        - alias: "Steckdose meldet nicht „an“?"
+                          if:
+                            - alias: "Steckdose nicht eingeschaltet"
+                              condition: "template"
+                              value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                          then:
+                            - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                              action: "persistent_notification.create"
+                              data:
+                                notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                                title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                                message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                            - alias: "Im Logbuch festhalten"
+                              action: "logbook.log"
+                              data:
+                                name: "{{ raum_name }} Klima"
+                                message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                                entity_id: "{{ klima_aktiv }}"
+                            - alias: "Lauf mit Fehler beenden"
+                              stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                              error: true
+                        - alias: "Im Logbuch festhalten"
+                          action: "logbook.log"
+                          data:
+                            name: "{{ raum_name }} Klima"
+                            message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                            entity_id: "{{ klima_aktiv }}"
+                        - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                          delay:
+                            seconds: "{{ vorlauf_s | int }}"
+                    - alias: "IR-Sender prüfen"
+                      if:
+                        - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                          condition: "template"
+                          value_template: "{{ not is_state(klima_sender, 'on') }}"
+                      then:
+                        - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                          action: "persistent_notification.create"
+                          data:
+                            notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                            title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                            message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                        - alias: "Im Logbuch festhalten"
+                          action: "logbook.log"
+                          data:
+                            name: "{{ raum_name }} Klima"
+                            message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                            entity_id: "{{ klima_aktiv }}"
+                        - alias: "Lauf mit Fehler beenden"
+                          stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                          error: true
+                    - alias: "Zusatzbefehl mit Stufe senden"
+                      action: "remote.send_command"
+                      target:
+                        entity_id: "{{ klima_sender }}"
+                      data:
+                        device: "{{ ir_geraet }}"
+                        command: "{{ repeat.item | replace('{stufe}', (m_stufe | int) | string) | replace('{luefter}', luefter) }}"
+          - alias: "Gesendete Stufe merken"
+            action: "input_number.set_value"
+            target:
+              entity_id: "{{ letzte_stufe }}"
+            data:
+              value: "{{ m_stufe | int }}"
+          - alias: "Modus Manuell Kühlen setzen"
+            action: "input_select.select_option"
+            target:
+              entity_id: "{{ klima_modus }}"
+            data:
+              option: "Manuell Kühlen"
+          - alias: "Kühlbefehl aktiv"
+            action: "input_boolean.turn_on"
+            target:
+              entity_id: "{{ klima_aktiv }}"
+      - alias: "Automatik: Kühlen einschalten oder Stufe anpassen"
+        conditions:
+          - alias: "Kühlen ein"
+            condition: "template"
+            value_template: "{{ entscheidung == 'kuehlen_ein' }}"
+        sequence:
+          - alias: "Bedienung hat Vorrang: laufendes PV-Heizen zuerst beenden"
+            if:
+              - alias: "PV-Heizen in diesem Raum freigegeben oder aktiv"
+                condition: "template"
+                value_template: "{{ pv_ok and (is_state(pv_heizfreigabe, 'on') or is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on') or pv_verantwortung | select('is_state', 'on') | list | count > 0) }}"
+            then:
+              - alias: "PV-Heizfreigabe ausschalten (die PV-Automation beendet daraufhin ihre Sitzung)"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ pv_heizfreigabe }}"
+              - alias: "Höchstens 30 s auf die Rückgabe durch die PV-Automation warten"
+                wait_template: "{{ is_state(pv_heizbefehl, 'off') and is_state(pv_auftrag, 'off') and pv_verantwortung | select('is_state', 'on') | list | count == 0 }}"
+                timeout:
+                  seconds: 30
+          - alias: "Kühlbefehl mit Stufe senden (nur bei erreichbarem IR-Sender)"
+            sequence:
+              - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                if:
+                  - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                    condition: "template"
+                    value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                then:
+                  - alias: "Steckdose einschalten"
+                    action: "switch.turn_on"
+                    target:
+                      entity_id: "{{ klima_steckdose }}"
+                    continue_on_error: true
+                  - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                    wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                    timeout:
+                      seconds: 20
+                  - alias: "Steckdose meldet nicht „an“?"
+                    if:
+                      - alias: "Steckdose nicht eingeschaltet"
+                        condition: "template"
+                        value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                    then:
+                      - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                        action: "persistent_notification.create"
+                        data:
+                          notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                          title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                          message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Lauf mit Fehler beenden"
+                        stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                        error: true
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                    delay:
+                      seconds: "{{ vorlauf_s | int }}"
+              - alias: "IR-Sender prüfen"
+                if:
+                  - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                    condition: "template"
+                    value_template: "{{ not is_state(klima_sender, 'on') }}"
+                then:
+                  - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                    action: "persistent_notification.create"
+                    data:
+                      notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                      title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                      message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Lauf mit Fehler beenden"
+                    stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                    error: true
+              - alias: "Kühlbefehl mit Stufe senden"
+                action: "remote.send_command"
+                target:
+                  entity_id: "{{ klima_sender }}"
+                data:
+                  device: "{{ ir_geraet }}"
+                  command: "{{ befehl_kuehlen | replace('{stufe}', (auto_stufe | int) | string) | replace('{luefter}', luefter) }}"
+          - alias: "Zusatzbefehle nacheinander senden, falls eingerichtet (mehrere durch Komma getrennt, z. B. eco_{stufe}, display_off)"
+            repeat:
+              for_each: "{{ (befehl_kuehlen_zusatz | string).split(',') | map('trim') | reject('eq', '') | list }}"
+              sequence:
+                - alias: "1 s Abstand zwischen IR-Befehlen"
+                  delay:
+                    seconds: 1
+                - alias: "Zusatzbefehl mit Stufe senden (nur bei erreichbarem IR-Sender)"
+                  sequence:
+                    - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                      if:
+                        - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                          condition: "template"
+                          value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                      then:
+                        - alias: "Steckdose einschalten"
+                          action: "switch.turn_on"
+                          target:
+                            entity_id: "{{ klima_steckdose }}"
+                          continue_on_error: true
+                        - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                          wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                          timeout:
+                            seconds: 20
+                        - alias: "Steckdose meldet nicht „an“?"
+                          if:
+                            - alias: "Steckdose nicht eingeschaltet"
+                              condition: "template"
+                              value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                          then:
+                            - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                              action: "persistent_notification.create"
+                              data:
+                                notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                                title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                                message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                            - alias: "Im Logbuch festhalten"
+                              action: "logbook.log"
+                              data:
+                                name: "{{ raum_name }} Klima"
+                                message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                                entity_id: "{{ klima_aktiv }}"
+                            - alias: "Lauf mit Fehler beenden"
+                              stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                              error: true
+                        - alias: "Im Logbuch festhalten"
+                          action: "logbook.log"
+                          data:
+                            name: "{{ raum_name }} Klima"
+                            message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                            entity_id: "{{ klima_aktiv }}"
+                        - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                          delay:
+                            seconds: "{{ vorlauf_s | int }}"
+                    - alias: "IR-Sender prüfen"
+                      if:
+                        - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                          condition: "template"
+                          value_template: "{{ not is_state(klima_sender, 'on') }}"
+                      then:
+                        - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                          action: "persistent_notification.create"
+                          data:
+                            notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                            title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                            message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                        - alias: "Im Logbuch festhalten"
+                          action: "logbook.log"
+                          data:
+                            name: "{{ raum_name }} Klima"
+                            message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                            entity_id: "{{ klima_aktiv }}"
+                        - alias: "Lauf mit Fehler beenden"
+                          stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                          error: true
+                    - alias: "Zusatzbefehl mit Stufe senden"
+                      action: "remote.send_command"
+                      target:
+                        entity_id: "{{ klima_sender }}"
+                      data:
+                        device: "{{ ir_geraet }}"
+                        command: "{{ repeat.item | replace('{stufe}', (auto_stufe | int) | string) | replace('{luefter}', luefter) }}"
+          - alias: "Gesendete Stufe merken"
+            action: "input_number.set_value"
+            target:
+              entity_id: "{{ letzte_stufe }}"
+            data:
+              value: "{{ auto_stufe | int }}"
+          - alias: "2 s warten"
+            delay:
+              seconds: 2
+          - alias: "Kühlbefehl aktiv"
+            action: "input_boolean.turn_on"
+            target:
+              entity_id: "{{ klima_aktiv }}"
+      - alias: "Automatik: Ziel erreicht, ausschalten"
+        conditions:
+          - alias: "Kühlen aus"
+            condition: "template"
+            value_template: "{{ entscheidung == 'kuehlen_aus' }}"
+        sequence:
+          - alias: "Bedienung hat Vorrang: laufendes PV-Heizen zuerst beenden"
+            if:
+              - alias: "PV-Heizen in diesem Raum freigegeben oder aktiv"
+                condition: "template"
+                value_template: "{{ pv_ok and (is_state(pv_heizfreigabe, 'on') or is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on')) }}"
+            then:
+              - alias: "PV-Heizfreigabe ausschalten"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ pv_heizfreigabe }}"
+              - alias: "Höchstens 30 s auf die PV-Rückgabe warten"
+                wait_template: "{{ is_state(pv_heizbefehl, 'off') and is_state(pv_auftrag, 'off') }}"
+                timeout:
+                  seconds: 30
+          - alias: "Klimaanlage per IR ausschalten (nur bei erreichbarem IR-Sender)"
+            sequence:
+              - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                if:
+                  - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                    condition: "template"
+                    value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                then:
+                  - alias: "Steckdose einschalten"
+                    action: "switch.turn_on"
+                    target:
+                      entity_id: "{{ klima_steckdose }}"
+                    continue_on_error: true
+                  - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                    wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                    timeout:
+                      seconds: 20
+                  - alias: "Steckdose meldet nicht „an“?"
+                    if:
+                      - alias: "Steckdose nicht eingeschaltet"
+                        condition: "template"
+                        value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                    then:
+                      - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                        action: "persistent_notification.create"
+                        data:
+                          notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                          title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                          message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Lauf mit Fehler beenden"
+                        stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                        error: true
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                    delay:
+                      seconds: "{{ vorlauf_s | int }}"
+              - alias: "IR-Sender prüfen"
+                if:
+                  - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                    condition: "template"
+                    value_template: "{{ not is_state(klima_sender, 'on') }}"
+                then:
+                  - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                    action: "persistent_notification.create"
+                    data:
+                      notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                      title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                      message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Lauf mit Fehler beenden"
+                    stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                    error: true
+              - alias: "Klimaanlage per IR ausschalten"
+                action: "remote.send_command"
+                target:
+                  entity_id: "{{ klima_sender }}"
+                data:
+                  device: "{{ ir_geraet }}"
+                  command: "{{ befehl_aus | replace('{luefter}', luefter) }}"
+          - alias: "2 s warten"
+            delay:
+              seconds: 2
+          - alias: "Kühlbefehl inaktiv"
+            action: "input_boolean.turn_off"
+            target:
+              entity_id: "{{ klima_aktiv }}"
+          - alias: "Letzte Stufe zurücksetzen"
+            action: "input_number.set_value"
+            target:
+              entity_id: "{{ letzte_stufe }}"
+            data:
+              value: 0
+      - alias: "PV-Notrückgabe: PV-Automation ausgefallen, Klimaanlage sicher ausschalten"
+        conditions:
+          - alias: "PV-Notfall"
+            condition: "template"
+            value_template: "{{ entscheidung == 'pv_rueckgabe' }}"
+        sequence:
+          - alias: "Klimaanlage per IR ausschalten"
+            action: "remote.send_command"
+            target:
+              entity_id: "{{ klima_sender }}"
+            data:
+              device: "{{ ir_geraet }}"
+              command: "{{ befehl_aus | replace('{luefter}', luefter) }}"
+            continue_on_error: true
+          - alias: "PV-Heizbefehl zurücknehmen"
+            action: "input_boolean.turn_off"
+            target:
+              entity_id: "{{ [pv_heizbefehl, pv_auftrag] + pv_verantwortung }}"
+          - alias: "PV-Heizfreigabe ausschalten (muss bewusst wieder eingeschaltet werden)"
+            action: "input_boolean.turn_off"
+            target:
+              entity_id: "{{ pv_heizfreigabe }}"
+          - alias: "PV-Status aktualisieren"
+            if:
+              - alias: "PV-Status-Helfer vorhanden"
+                condition: "template"
+                value_template: "{{ pv_status is string and pv_status != '' }}"
+            then:
+              - alias: "Status schreiben"
+                action: "input_text.set_value"
+                target:
+                  entity_id: "{{ pv_status }}"
+                data:
+                  value: "Notrückgabe durch Klimaautomatik: PV-Automation ausgefallen, Klima aus"
+          - alias: "Beständige Meldung"
+            action: "persistent_notification.create"
+            data:
+              notification_id: "{{ 'hz_pv_notrueckgabe_' ~ raum_schluessel }}"
+              title: "{{ raum_name }}: PV-Heizen durch Notrückgabe beendet"
+              message: "Die PV-Überschussheizen-Automation war ausgeschaltet oder hat ihre Sicherheitsfreigabe nicht erneuert, während die Klimaanlage für PV heizte. Die Klimaanlage wurde ausgeschaltet und die PV-Heizfreigabe zurückgenommen. Die Heizkörper übernimmt die Raumheizungssteuerung automatisch."
+      - alias: "Steckdose war ausgeschaltet: wieder einschalten und Klimazustand herstellen"
+        conditions:
+          - alias: "Steckdose wieder einschalten"
+            condition: "template"
+            value_template: "{{ entscheidung == 'steckdose_ein' }}"
+        sequence:
+          - alias: "Im Logbuch festhalten"
+            action: "logbook.log"
+            data:
+              name: "{{ raum_name }} Klima"
+              message: "Steckdose der Klimaanlage war seit 1 Minute aus – wird wieder eingeschaltet (dauerhaft eingeschaltet halten)."
+              entity_id: "{{ klima_aktiv }}"
+          - alias: "Klimazustand nach dem Wiedereinschalten herstellen"
+            choose:
+              - alias: "PV-Heizen ist verantwortlich: nur Strom herstellen"
+                conditions:
+                  - alias: "PV belegt"
+                    condition: "template"
+                    value_template: "{{ pv_belegt }}"
+                sequence:
+                  - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                    if:
+                      - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                        condition: "template"
+                        value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                    then:
+                      - alias: "Steckdose einschalten"
+                        action: "switch.turn_on"
+                        target:
+                          entity_id: "{{ klima_steckdose }}"
+                        continue_on_error: true
+                      - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                        wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                        timeout:
+                          seconds: 20
+                      - alias: "Steckdose meldet nicht „an“?"
+                        if:
+                          - alias: "Steckdose nicht eingeschaltet"
+                            condition: "template"
+                            value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                        then:
+                          - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                            action: "persistent_notification.create"
+                            data:
+                              notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                              title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                              message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                          - alias: "Im Logbuch festhalten"
+                            action: "logbook.log"
+                            data:
+                              name: "{{ raum_name }} Klima"
+                              message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                              entity_id: "{{ klima_aktiv }}"
+                          - alias: "Lauf mit Fehler beenden"
+                            stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                            error: true
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                        delay:
+                          seconds: "{{ vorlauf_s | int }}"
+              - alias: "Kühlen war aktiv: zuletzt gesendete Stufe erneut senden"
+                conditions:
+                  - alias: "Kühlbefehl aktiv mit Stufe"
+                    condition: "template"
+                    value_template: "{{ aktiv_jetzt and stufe_jetzt > 0 }}"
+                sequence:
+                  - alias: "Bedienung hat Vorrang: laufendes PV-Heizen zuerst beenden"
+                    if:
+                      - alias: "PV-Heizen in diesem Raum freigegeben oder aktiv"
+                        condition: "template"
+                        value_template: "{{ pv_ok and (is_state(pv_heizfreigabe, 'on') or is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on') or pv_verantwortung | select('is_state', 'on') | list | count > 0) }}"
+                    then:
+                      - alias: "PV-Heizfreigabe ausschalten (die PV-Automation beendet daraufhin ihre Sitzung)"
+                        action: "input_boolean.turn_off"
+                        target:
+                          entity_id: "{{ pv_heizfreigabe }}"
+                      - alias: "Höchstens 30 s auf die Rückgabe durch die PV-Automation warten"
+                        wait_template: "{{ is_state(pv_heizbefehl, 'off') and is_state(pv_auftrag, 'off') and pv_verantwortung | select('is_state', 'on') | list | count == 0 }}"
+                        timeout:
+                          seconds: 30
+                  - alias: "Kühlbefehl mit Stufe senden (nur bei erreichbarem IR-Sender)"
+                    sequence:
+                      - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                        if:
+                          - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                            condition: "template"
+                            value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                        then:
+                          - alias: "Steckdose einschalten"
+                            action: "switch.turn_on"
+                            target:
+                              entity_id: "{{ klima_steckdose }}"
+                            continue_on_error: true
+                          - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                            wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                            timeout:
+                              seconds: 20
+                          - alias: "Steckdose meldet nicht „an“?"
+                            if:
+                              - alias: "Steckdose nicht eingeschaltet"
+                                condition: "template"
+                                value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                            then:
+                              - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                                action: "persistent_notification.create"
+                                data:
+                                  notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                                  title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                                  message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                              - alias: "Im Logbuch festhalten"
+                                action: "logbook.log"
+                                data:
+                                  name: "{{ raum_name }} Klima"
+                                  message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                                  entity_id: "{{ klima_aktiv }}"
+                              - alias: "Lauf mit Fehler beenden"
+                                stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                                error: true
+                          - alias: "Im Logbuch festhalten"
+                            action: "logbook.log"
+                            data:
+                              name: "{{ raum_name }} Klima"
+                              message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                              entity_id: "{{ klima_aktiv }}"
+                          - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                            delay:
+                              seconds: "{{ vorlauf_s | int }}"
+                      - alias: "IR-Sender prüfen"
+                        if:
+                          - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                            condition: "template"
+                            value_template: "{{ not is_state(klima_sender, 'on') }}"
+                        then:
+                          - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                            action: "persistent_notification.create"
+                            data:
+                              notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                              title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                              message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                          - alias: "Im Logbuch festhalten"
+                            action: "logbook.log"
+                            data:
+                              name: "{{ raum_name }} Klima"
+                              message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                              entity_id: "{{ klima_aktiv }}"
+                          - alias: "Lauf mit Fehler beenden"
+                            stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                            error: true
+                      - alias: "Kühlbefehl mit Stufe senden"
+                        action: "remote.send_command"
+                        target:
+                          entity_id: "{{ klima_sender }}"
+                        data:
+                          device: "{{ ir_geraet }}"
+                          command: "{{ befehl_kuehlen | replace('{stufe}', (stufe_jetzt | int) | string) | replace('{luefter}', luefter) }}"
+                  - alias: "Zusatzbefehle nacheinander senden, falls eingerichtet (mehrere durch Komma getrennt, z. B. eco_{stufe}, display_off)"
+                    repeat:
+                      for_each: "{{ (befehl_kuehlen_zusatz | string).split(',') | map('trim') | reject('eq', '') | list }}"
+                      sequence:
+                        - alias: "1 s Abstand zwischen IR-Befehlen"
+                          delay:
+                            seconds: 1
+                        - alias: "Zusatzbefehl mit Stufe senden (nur bei erreichbarem IR-Sender)"
+                          sequence:
+                            - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                              if:
+                                - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                                  condition: "template"
+                                  value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                              then:
+                                - alias: "Steckdose einschalten"
+                                  action: "switch.turn_on"
+                                  target:
+                                    entity_id: "{{ klima_steckdose }}"
+                                  continue_on_error: true
+                                - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                                  wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                                  timeout:
+                                    seconds: 20
+                                - alias: "Steckdose meldet nicht „an“?"
+                                  if:
+                                    - alias: "Steckdose nicht eingeschaltet"
+                                      condition: "template"
+                                      value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                                  then:
+                                    - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                                      action: "persistent_notification.create"
+                                      data:
+                                        notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                                        title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                                        message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                                    - alias: "Im Logbuch festhalten"
+                                      action: "logbook.log"
+                                      data:
+                                        name: "{{ raum_name }} Klima"
+                                        message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                                        entity_id: "{{ klima_aktiv }}"
+                                    - alias: "Lauf mit Fehler beenden"
+                                      stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                                      error: true
+                                - alias: "Im Logbuch festhalten"
+                                  action: "logbook.log"
+                                  data:
+                                    name: "{{ raum_name }} Klima"
+                                    message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                                    entity_id: "{{ klima_aktiv }}"
+                                - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                                  delay:
+                                    seconds: "{{ vorlauf_s | int }}"
+                            - alias: "IR-Sender prüfen"
+                              if:
+                                - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                                  condition: "template"
+                                  value_template: "{{ not is_state(klima_sender, 'on') }}"
+                              then:
+                                - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                                  action: "persistent_notification.create"
+                                  data:
+                                    notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                                    title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                                    message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                                - alias: "Im Logbuch festhalten"
+                                  action: "logbook.log"
+                                  data:
+                                    name: "{{ raum_name }} Klima"
+                                    message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                                    entity_id: "{{ klima_aktiv }}"
+                                - alias: "Lauf mit Fehler beenden"
+                                  stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                                  error: true
+                            - alias: "Zusatzbefehl mit Stufe senden"
+                              action: "remote.send_command"
+                              target:
+                                entity_id: "{{ klima_sender }}"
+                              data:
+                                device: "{{ ir_geraet }}"
+                                command: "{{ repeat.item | replace('{stufe}', (stufe_jetzt | int) | string) | replace('{luefter}', luefter) }}"
+                  - alias: "Gesendete Stufe merken"
+                    action: "input_number.set_value"
+                    target:
+                      entity_id: "{{ letzte_stufe }}"
+                    data:
+                      value: "{{ stufe_jetzt | int }}"
+            default:
+              - alias: "Sicherheitshalber Aus senden (manche Klimaanlagen laufen nach Stromrückkehr von selbst weiter) (nur bei erreichbarem IR-Sender)"
+                sequence:
+                  - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                    if:
+                      - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                        condition: "template"
+                        value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                    then:
+                      - alias: "Steckdose einschalten"
+                        action: "switch.turn_on"
+                        target:
+                          entity_id: "{{ klima_steckdose }}"
+                        continue_on_error: true
+                      - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                        wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                        timeout:
+                          seconds: 20
+                      - alias: "Steckdose meldet nicht „an“?"
+                        if:
+                          - alias: "Steckdose nicht eingeschaltet"
+                            condition: "template"
+                            value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                        then:
+                          - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                            action: "persistent_notification.create"
+                            data:
+                              notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                              title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                              message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                          - alias: "Im Logbuch festhalten"
+                            action: "logbook.log"
+                            data:
+                              name: "{{ raum_name }} Klima"
+                              message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                              entity_id: "{{ klima_aktiv }}"
+                          - alias: "Lauf mit Fehler beenden"
+                            stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                            error: true
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                        delay:
+                          seconds: "{{ vorlauf_s | int }}"
+                  - alias: "IR-Sender prüfen"
+                    if:
+                      - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                        condition: "template"
+                        value_template: "{{ not is_state(klima_sender, 'on') }}"
+                    then:
+                      - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                        action: "persistent_notification.create"
+                        data:
+                          notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                          title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                          message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Lauf mit Fehler beenden"
+                        stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                        error: true
+                  - alias: "Sicherheitshalber Aus senden (manche Klimaanlagen laufen nach Stromrückkehr von selbst weiter)"
+                    action: "remote.send_command"
+                    target:
+                      entity_id: "{{ klima_sender }}"
+                    data:
+                      device: "{{ ir_geraet }}"
+                      command: "{{ befehl_aus | replace('{luefter}', luefter) }}"
+      - alias: "Rückmeldung: Klimaanlage läuft nach dem Einschaltbefehl nicht – einmal wiederholen"
+        conditions:
+          - alias: "Nachsenden Ein"
+            condition: "template"
+            value_template: "{{ entscheidung == 'nachsenden_ein' }}"
+        sequence:
+          - alias: "Im Logbuch festhalten"
+            action: "logbook.log"
+            data:
+              name: "{{ raum_name }} Klima"
+              message: "Klimaanlage läuft {{ pruef_ein_min | int }} min nach dem Einschaltbefehl nicht ({{ states(klima_leistung) }} W) – Stufe {{ stufe_jetzt }} wird einmal wiederholt."
+              entity_id: "{{ klima_aktiv }}"
+          - alias: "Bedienung hat Vorrang: laufendes PV-Heizen zuerst beenden"
+            if:
+              - alias: "PV-Heizen in diesem Raum freigegeben oder aktiv"
+                condition: "template"
+                value_template: "{{ pv_ok and (is_state(pv_heizfreigabe, 'on') or is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on') or pv_verantwortung | select('is_state', 'on') | list | count > 0) }}"
+            then:
+              - alias: "PV-Heizfreigabe ausschalten (die PV-Automation beendet daraufhin ihre Sitzung)"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ pv_heizfreigabe }}"
+              - alias: "Höchstens 30 s auf die Rückgabe durch die PV-Automation warten"
+                wait_template: "{{ is_state(pv_heizbefehl, 'off') and is_state(pv_auftrag, 'off') and pv_verantwortung | select('is_state', 'on') | list | count == 0 }}"
+                timeout:
+                  seconds: 30
+          - alias: "Kühlbefehl mit Stufe senden (nur bei erreichbarem IR-Sender)"
+            sequence:
+              - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                if:
+                  - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                    condition: "template"
+                    value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                then:
+                  - alias: "Steckdose einschalten"
+                    action: "switch.turn_on"
+                    target:
+                      entity_id: "{{ klima_steckdose }}"
+                    continue_on_error: true
+                  - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                    wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                    timeout:
+                      seconds: 20
+                  - alias: "Steckdose meldet nicht „an“?"
+                    if:
+                      - alias: "Steckdose nicht eingeschaltet"
+                        condition: "template"
+                        value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                    then:
+                      - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                        action: "persistent_notification.create"
+                        data:
+                          notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                          title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                          message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Lauf mit Fehler beenden"
+                        stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                        error: true
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                    delay:
+                      seconds: "{{ vorlauf_s | int }}"
+              - alias: "IR-Sender prüfen"
+                if:
+                  - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                    condition: "template"
+                    value_template: "{{ not is_state(klima_sender, 'on') }}"
+                then:
+                  - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                    action: "persistent_notification.create"
+                    data:
+                      notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                      title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                      message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Lauf mit Fehler beenden"
+                    stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                    error: true
+              - alias: "Kühlbefehl mit Stufe senden"
+                action: "remote.send_command"
+                target:
+                  entity_id: "{{ klima_sender }}"
+                data:
+                  device: "{{ ir_geraet }}"
+                  command: "{{ befehl_kuehlen | replace('{stufe}', (stufe_jetzt | int) | string) | replace('{luefter}', luefter) }}"
+          - alias: "Zusatzbefehle nacheinander senden, falls eingerichtet (mehrere durch Komma getrennt, z. B. eco_{stufe}, display_off)"
+            repeat:
+              for_each: "{{ (befehl_kuehlen_zusatz | string).split(',') | map('trim') | reject('eq', '') | list }}"
+              sequence:
+                - alias: "1 s Abstand zwischen IR-Befehlen"
+                  delay:
+                    seconds: 1
+                - alias: "Zusatzbefehl mit Stufe senden (nur bei erreichbarem IR-Sender)"
+                  sequence:
+                    - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                      if:
+                        - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                          condition: "template"
+                          value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                      then:
+                        - alias: "Steckdose einschalten"
+                          action: "switch.turn_on"
+                          target:
+                            entity_id: "{{ klima_steckdose }}"
+                          continue_on_error: true
+                        - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                          wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                          timeout:
+                            seconds: 20
+                        - alias: "Steckdose meldet nicht „an“?"
+                          if:
+                            - alias: "Steckdose nicht eingeschaltet"
+                              condition: "template"
+                              value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                          then:
+                            - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                              action: "persistent_notification.create"
+                              data:
+                                notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                                title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                                message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                            - alias: "Im Logbuch festhalten"
+                              action: "logbook.log"
+                              data:
+                                name: "{{ raum_name }} Klima"
+                                message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                                entity_id: "{{ klima_aktiv }}"
+                            - alias: "Lauf mit Fehler beenden"
+                              stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                              error: true
+                        - alias: "Im Logbuch festhalten"
+                          action: "logbook.log"
+                          data:
+                            name: "{{ raum_name }} Klima"
+                            message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                            entity_id: "{{ klima_aktiv }}"
+                        - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                          delay:
+                            seconds: "{{ vorlauf_s | int }}"
+                    - alias: "IR-Sender prüfen"
+                      if:
+                        - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                          condition: "template"
+                          value_template: "{{ not is_state(klima_sender, 'on') }}"
+                      then:
+                        - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                          action: "persistent_notification.create"
+                          data:
+                            notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                            title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                            message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                        - alias: "Im Logbuch festhalten"
+                          action: "logbook.log"
+                          data:
+                            name: "{{ raum_name }} Klima"
+                            message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                            entity_id: "{{ klima_aktiv }}"
+                        - alias: "Lauf mit Fehler beenden"
+                          stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                          error: true
+                    - alias: "Zusatzbefehl mit Stufe senden"
+                      action: "remote.send_command"
+                      target:
+                        entity_id: "{{ klima_sender }}"
+                      data:
+                        device: "{{ ir_geraet }}"
+                        command: "{{ repeat.item | replace('{stufe}', (stufe_jetzt | int) | string) | replace('{luefter}', luefter) }}"
+          - alias: "Gesendete Stufe merken"
+            action: "input_number.set_value"
+            target:
+              entity_id: "{{ letzte_stufe }}"
+            data:
+              value: "{{ stufe_jetzt | int }}"
+      - alias: "Rückmeldung: Klimaanlage läuft auch nach der Wiederholung nicht – melden"
+        conditions:
+          - alias: "Fehler Ein"
+            condition: "template"
+            value_template: "{{ entscheidung == 'fehler_ein' }}"
+        sequence:
+          - alias: "Dauerhafte Meldung: Klimaanlage reagiert nicht"
+            action: "persistent_notification.create"
+            data:
+              notification_id: "{{ 'hz_klima_rueckmeldung_' ~ raum_schluessel }}"
+              title: "Klima {{ raum_name }}: Klimaanlage reagiert nicht"
+              message: "Der Einschaltbefehl (Stufe {{ stufe_jetzt }}) wurde zweimal gesendet, die Klimaanlage nimmt aber nur {{ states(klima_leistung) }} W auf (läuft ab {{ laeuft_ab_w | int }} W). Bitte vor Ort prüfen: Sichtverbindung zum IR-Sender, Strom, Fehleranzeige am Gerät."
+          - alias: "Im Logbuch festhalten"
+            action: "logbook.log"
+            data:
+              name: "{{ raum_name }} Klima"
+              message: "Klimaanlage reagiert auch auf die Wiederholung nicht ({{ states(klima_leistung) }} W)."
+              entity_id: "{{ klima_aktiv }}"
+      - alias: "Rückmeldung: Klimaanlage läuft nach dem Ausschaltbefehl weiter – einmal wiederholen"
+        conditions:
+          - alias: "Nachsenden Aus"
+            condition: "template"
+            value_template: "{{ entscheidung == 'nachsenden_aus' }}"
+        sequence:
+          - alias: "Im Logbuch festhalten"
+            action: "logbook.log"
+            data:
+              name: "{{ raum_name }} Klima"
+              message: "Klimaanlage nimmt {{ pruef_aus_min | int }} min nach dem Ausschalten noch {{ states(klima_leistung) }} W auf – Aus wird einmal wiederholt."
+              entity_id: "{{ klima_aktiv }}"
+          - alias: "Bedienung hat Vorrang: laufendes PV-Heizen zuerst beenden"
+            if:
+              - alias: "PV-Heizen in diesem Raum freigegeben oder aktiv"
+                condition: "template"
+                value_template: "{{ pv_ok and (is_state(pv_heizfreigabe, 'on') or is_state(pv_heizbefehl, 'on') or is_state(pv_auftrag, 'on')) }}"
+            then:
+              - alias: "PV-Heizfreigabe ausschalten"
+                action: "input_boolean.turn_off"
+                target:
+                  entity_id: "{{ pv_heizfreigabe }}"
+              - alias: "Höchstens 30 s auf die PV-Rückgabe warten"
+                wait_template: "{{ is_state(pv_heizbefehl, 'off') and is_state(pv_auftrag, 'off') }}"
+                timeout:
+                  seconds: 30
+          - alias: "Klimaanlage per IR ausschalten (nur bei erreichbarem IR-Sender)"
+            sequence:
+              - alias: "Stromversorgung der Klimaanlage sicherstellen"
+                if:
+                  - alias: "Steckdose eingerichtet und nicht eingeschaltet"
+                    condition: "template"
+                    value_template: "{{ steckdose_ok and not is_state(klima_steckdose, 'on') }}"
+                then:
+                  - alias: "Steckdose einschalten"
+                    action: "switch.turn_on"
+                    target:
+                      entity_id: "{{ klima_steckdose }}"
+                    continue_on_error: true
+                  - alias: "Höchstens 20 s warten, bis die Steckdose „an“ meldet"
+                    wait_template: "{{ is_state(klima_steckdose, 'on') }}"
+                    timeout:
+                      seconds: 20
+                  - alias: "Steckdose meldet nicht „an“?"
+                    if:
+                      - alias: "Steckdose nicht eingeschaltet"
+                        condition: "template"
+                        value_template: "{{ not is_state(klima_steckdose, 'on') }}"
+                    then:
+                      - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                        action: "persistent_notification.create"
+                        data:
+                          notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                          title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                          message: "Die Steckdose {{ klima_steckdose }} der Klimaanlage lässt sich nicht einschalten (Zustand: {{ states(klima_steckdose) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                      - alias: "Im Logbuch festhalten"
+                        action: "logbook.log"
+                        data:
+                          name: "{{ raum_name }} Klima"
+                          message: "Steckdose lässt sich nicht einschalten – Befehl nicht gesendet."
+                          entity_id: "{{ klima_aktiv }}"
+                      - alias: "Lauf mit Fehler beenden"
+                        stop: "Steckdose der Klimaanlage nicht eingeschaltet"
+                        error: true
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "Steckdose der Klimaanlage war aus – eingeschaltet, {{ vorlauf_s | int }} s Wartezeit vor dem IR-Befehl."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Klimaanlage nach dem Einschalten hochfahren lassen"
+                    delay:
+                      seconds: "{{ vorlauf_s | int }}"
+              - alias: "IR-Sender prüfen"
+                if:
+                  - alias: "IR-Sender nicht eingeschaltet oder nicht erreichbar"
+                    condition: "template"
+                    value_template: "{{ not is_state(klima_sender, 'on') }}"
+                then:
+                  - alias: "Dauerhafte Meldung: Klimabefehl nicht gesendet"
+                    action: "persistent_notification.create"
+                    data:
+                      notification_id: "{{ 'hz_klima_ir_' ~ raum_schluessel }}"
+                      title: "Klima {{ raum_name }}: IR-Befehl nicht gesendet"
+                      message: "Der IR-Sender {{ klima_sender }} ist nicht erreichbar oder ausgeschaltet (Zustand: {{ states(klima_sender) }}). Der Klimabefehl wurde NICHT gesendet; der Zustand der Klimaanlage wurde nicht verändert."
+                  - alias: "Im Logbuch festhalten"
+                    action: "logbook.log"
+                    data:
+                      name: "{{ raum_name }} Klima"
+                      message: "IR-Sender nicht erreichbar – Befehl nicht gesendet."
+                      entity_id: "{{ klima_aktiv }}"
+                  - alias: "Lauf mit Fehler beenden"
+                    stop: "IR-Senden fehlgeschlagen: Sender nicht erreichbar"
+                    error: true
+              - alias: "Klimaanlage per IR ausschalten"
+                action: "remote.send_command"
+                target:
+                  entity_id: "{{ klima_sender }}"
+                data:
+                  device: "{{ ir_geraet }}"
+                  command: "{{ befehl_aus | replace('{luefter}', luefter) }}"
+      - alias: "Rückmeldung: Klimaanlage läuft auch nach der Wiederholung weiter – melden"
+        conditions:
+          - alias: "Fehler Aus"
+            condition: "template"
+            value_template: "{{ entscheidung == 'fehler_aus' }}"
+        sequence:
+          - alias: "Dauerhafte Meldung: Klimaanlage lässt sich nicht ausschalten"
+            action: "persistent_notification.create"
+            data:
+              notification_id: "{{ 'hz_klima_rueckmeldung_' ~ raum_schluessel }}"
+              title: "Klima {{ raum_name }}: Klimaanlage läuft weiter"
+              message: "Der Ausschaltbefehl wurde zweimal gesendet, die Klimaanlage nimmt aber weiter {{ states(klima_leistung) }} W auf. Bitte vor Ort prüfen und notfalls mit der Originalfernbedienung ausschalten."
+          - alias: "Im Logbuch festhalten"
+            action: "logbook.log"
+            data:
+              name: "{{ raum_name }} Klima"
+              message: "Klimaanlage läuft auch nach der Wiederholung weiter ({{ states(klima_leistung) }} W)."
+              entity_id: "{{ klima_aktiv }}"
+      - alias: "Rückmeldung in Ordnung: eine frühere Meldung entfernen"
+        conditions:
+          - alias: "Rückmeldung ok"
+            condition: "template"
+            value_template: "{{ entscheidung == 'rueckmeldung_ok' }}"
+        sequence:
+          - alias: "Rückmelde-Meldung entfernen (falls vorhanden)"
+            action: "persistent_notification.dismiss"
+            data:
+              notification_id: "{{ 'hz_klima_rueckmeldung_' ~ raum_schluessel }}"

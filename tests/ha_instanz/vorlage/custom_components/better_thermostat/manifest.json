@@ -1,0 +1,2 @@
+{"domain": "better_thermostat", "name": "Better Thermostat (Testnachbau)", "version": "0.0.1", "config_flow": true,
+ "documentation": "https://example.invalid", "codeowners": [], "iot_class": "local_push", "requirements": [], "dependencies": []}

@@ -1,0 +1,13 @@
+{
+  "domain": "heizung_universal",
+  "name": "Heizung Universal",
+  "codeowners": ["@zerva165"],
+  "config_flow": true,
+  "dependencies": ["http", "websocket_api", "blueprint", "automation", "lovelace"],
+  "documentation": "https://github.com/zerva165/heizung-universal",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/zerva165/heizung-universal/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

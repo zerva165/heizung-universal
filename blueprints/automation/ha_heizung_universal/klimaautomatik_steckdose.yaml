@@ -1,0 +1,451 @@
+# Klimaautomatik Steckdose – Blueprint 4 (optional)
+# Erzeugt mit tools/build_klima_steckdose.py
+blueprint:
+  name: "Klimaautomatik Steckdose (Raum)"
+  description: "Paketversion 1.6.0 · Optionale Ergänzung zur „Universellen Raumheizungssteuerung“ für Klimaanlagen, die über eine Schaltsteckdose ein- und ausgeschaltet werden. Betriebsarten Aus, Automatik Kühlen (Ein- und Ausschalt-Abstand um die Zieltemperatur) und Manuell Kühlen (Dauerbetrieb). Kühlen nur in freigegebenen Heizprofilen, Fensterpause, optional nur bei Anwesenheit (beim Verlassen aus)."
+  domain: "automation"
+  author: "HA-Heizung-Universal"
+  homeassistant:
+    min_version: "2026.11.0"
+  input:
+    geraete:
+      name: "Raum und Klimaanlage"
+      icon: "mdi:power-socket-de"
+      input:
+        raum_name:
+          name: "Raumname"
+          default: "Raum"
+          selector:
+            text: {}
+        raum_schluessel:
+          name: "Raumkennung"
+          default: "raum"
+          description: "Wie in der Raumheizungssteuerung, z. B. `kinderzimmer`."
+          selector:
+            text: {}
+        klima_schalter:
+          name: "Schaltsteckdose der Klimaanlage"
+          description: "Schalter (z. B. Zigbee-Steckdose), der die Klimaanlage ein- und ausschaltet."
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "switch"
+                    - "input_boolean"
+              multiple: false
+        raumfuehler:
+          name: "Raumtemperatur"
+          description: "Externer Raumfühler oder das Better Thermostat des Raums."
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "sensor"
+                  device_class:
+                    - "temperature"
+                - domain:
+                    - "climate"
+        fensterkontakte:
+          name: "Fensterkontakte für die Klimaanlage"
+          default: []
+          description: "Kontakte, deren Öffnen die Klimaanlage pausiert."
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain:
+                    - "binary_sensor"
+                  device_class:
+                    - "window"
+                    - "door"
+                    - "opening"
+                - domain:
+                    - "input_boolean"
+    automatik:
+      name: "Automatik-Kühlen"
+      icon: "mdi:snowflake-thermometer"
+      collapsed: true
+      description: "Die Steckdose schaltet ein, wenn der Raum wärmer ist als Ziel plus Einschalt-Abstand, und aus, wenn er kühler ist als Ziel minus Ausschalt-Abstand."
+      input:
+        ein_ueber:
+          name: "Einschalten, wenn wärmer als Ziel plus"
+          default: 0.5
+          selector:
+            number:
+              min: 0
+              max: 3
+              step: 0.1
+              mode: "slider"
+              unit_of_measurement: "K"
+        aus_unter:
+          name: "Ausschalten, wenn kühler als Ziel minus"
+          default: 0.0
+          selector:
+            number:
+              min: 0
+              max: 3
+              step: 0.1
+              mode: "slider"
+              unit_of_measurement: "K"
+        fenster_minuten:
+          name: "Pause, wenn ein Fenster offen ist seit"
+          default: 3
+          selector:
+            number:
+              min: 0
+              max: 30
+              step: 1
+              mode: "box"
+              unit_of_measurement: "min"
+    anwesenheit_abschnitt:
+      name: "Anwesenheit"
+      icon: "mdi:home-account"
+      collapsed: true
+      description: "Optional: Die Klimaanlage läuft nur, solange diese Person bzw. dieser Schalter „zuhause“ bzw. „an“ meldet."
+      input:
+        anwesenheit:
+          name: "Anwesenheit (Person, Tracker oder Schalter, optional)"
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "person"
+                    - "device_tracker"
+                    - "binary_sensor"
+                    - "input_boolean"
+                    - "group"
+              multiple: false
+        abwesend_aus:
+          name: "Beim Verlassen auch den Klima-Modus auf Aus stellen"
+          default: true
+          description: "Nach der Rückkehr muss die Klimaanlage bewusst wieder eingeschaltet werden."
+          selector:
+            boolean: {}
+    heizung:
+      name: "Zusammenarbeit mit der Raumheizung"
+      icon: "mdi:radiator"
+      collapsed: true
+      description: "Kühlen ist nur erlaubt, wenn die Heizung dieses Raums in einem der gewählten Profile steht oder der globale Schalter „Heizung Aus“ an ist – so heizen Heizkörper und Klimaanlage nie gegeneinander."
+      input:
+        heizprofil:
+          name: "Heizprofil-Auswahl der Raumheizung"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_select"
+              multiple: false
+        kuehl_profile:
+          name: "Kühlen erlaubt in den Heizprofilen"
+          default:
+            - "Sommer"
+            - "Aus"
+          selector:
+            select:
+              multiple: true
+              mode: "list"
+              options:
+                - "Komfort"
+                - "Übergang"
+                - "Urlaub"
+                - "Sommer"
+                - "Aus"
+        haus_heizung_aus:
+          name: "Globaler Schalter „Heizung Aus“ (optional)"
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+    helfer:
+      name: "Raum-Helfer der Klimaanlage"
+      icon: "mdi:tune-variant"
+      collapsed: true
+      description: "Legt der Einrichtungsassistent an. Die Dashboard-Karte bedient die Klimaanlage nur über diese Helfer."
+      input:
+        klima_modus:
+          name: "Klima-Modus (input_select: Aus, Automatik Kühlen, Manuell Kühlen = Dauerbetrieb)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_select"
+              multiple: false
+        zieltemperatur:
+          name: "Automatik-Zieltemperatur (input_number)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_number"
+              multiple: false
+        klima_aktiv:
+          name: "Klimaanlage läuft (input_boolean, Anzeige)"
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - "input_boolean"
+              multiple: false
+    erweitert:
+      name: "Erweitert"
+      icon: "mdi:cog"
+      collapsed: true
+      input:
+        ausgabe_modus:
+          name: "Betriebsart"
+          default: "produktiv"
+          selector:
+            select:
+              mode: "list"
+              options:
+                - value: "produktiv"
+                  label: "Normalbetrieb"
+                - value: "test"
+                  label: "Testbetrieb (Entscheidung nur ins Logbuch)"
+mode: "queued"
+max: 10
+max_exceeded: "warning"
+trace:
+  stored_traces: 20
+variables:
+  raum_name: !input raum_name
+  raum_schluessel: !input raum_schluessel
+  klima_schalter: !input klima_schalter
+  raumfuehler: !input raumfuehler
+  fensterkontakte: !input fensterkontakte
+  ein_ueber: !input ein_ueber
+  aus_unter: !input aus_unter
+  anwesenheit: !input anwesenheit
+  abwesend_aus: !input abwesend_aus
+  heizprofil: !input heizprofil
+  kuehl_profile: !input kuehl_profile
+  haus_heizung_aus: !input haus_heizung_aus
+  klima_modus: !input klima_modus
+  zieltemperatur: !input zieltemperatur
+  klima_aktiv: !input klima_aktiv
+  ausgabe_modus: !input ausgabe_modus
+  produktiv: "{{ ausgabe_modus == 'produktiv' }}"
+  normal_ids:
+    - "raumtemperatur"
+    - "modus"
+    - "zieltemperatur"
+    - "heizprofil"
+    - "fenster_geschlossen"
+    - "anwesenheit"
+    - "ha_start"
+triggers:
+  - alias: "Nach dem Start von Home Assistant: Zustand prüfen"
+    trigger: "homeassistant"
+    event: "start"
+    id: "ha_start"
+  - alias: "Raumtemperatur geändert"
+    trigger: "state"
+    entity_id: !input raumfuehler
+    id: "raumtemperatur"
+  - alias: "Klima-Modus geändert"
+    trigger: "state"
+    entity_id: !input klima_modus
+    id: "modus"
+  - alias: "Automatik-Zieltemperatur geändert"
+    trigger: "state"
+    entity_id: !input zieltemperatur
+    id: "zieltemperatur"
+  - alias: "Heizprofil der Raumheizung geändert"
+    trigger: "state"
+    entity_id: !input heizprofil
+    id: "heizprofil"
+  - alias: "Globaler Schalter „Heizung Aus“ geändert"
+    trigger: "state"
+    entity_id: !input haus_heizung_aus
+    id: "heizprofil"
+  - alias: "Anwesenheit geändert"
+    trigger: "state"
+    entity_id: !input anwesenheit
+    id: "anwesenheit"
+  - alias: "Ein Fenster ist seit der Pausenzeit offen"
+    trigger: "state"
+    entity_id: !input fensterkontakte
+    to: "on"
+    for:
+      minutes: !input fenster_minuten
+    id: "fenster_offen"
+  - alias: "Ein Fenster wurde geschlossen"
+    trigger: "state"
+    entity_id: !input fensterkontakte
+    from: "on"
+    to: "off"
+    id: "fenster_geschlossen"
+  - alias: "Steckdose geschaltet (auch von Hand oder durch Ausfall)"
+    trigger: "state"
+    entity_id: !input klima_schalter
+    id: "schalter"
+conditions: []
+actions:
+  - alias: "Nach einem Neustart höchstens 2 Minuten auf gültige Werte warten"
+    if:
+      - alias: "Neustart"
+        condition: "template"
+        value_template: "{{ trigger.id == 'ha_start' }}"
+    then:
+      - alias: "Auf Raumtemperatur und Klima-Modus warten"
+        wait_template: "{%- set s = states(raumfuehler) if raumfuehler.startswith('sensor.') else state_attr(raumfuehler, 'current_temperature') -%}{{ is_number(s) and states(klima_modus) not in ['unknown', 'unavailable'] and states(heizprofil) not in ['unknown', 'unavailable'] }}"
+        timeout:
+          minutes: 2
+        continue_on_timeout: true
+  - alias: "Erstwiederherstellung eines Helfers nach dem Neustart ist keine echte Änderung"
+    if:
+      - alias: "Trigger ohne Vorzustand"
+        condition: "template"
+        value_template: "{{ trigger.id not in ['ha_start'] and trigger.from_state is none }}"
+    then:
+      - alias: "Sicher beenden"
+        stop: "Erstwiederherstellung eines Helfers"
+  - alias: "Aktuelle Werte lesen"
+    variables:
+      raum_temp: "{%- set s = states(raumfuehler) if raumfuehler.startswith('sensor.') else state_attr(raumfuehler, 'current_temperature') -%}{{ s | float(0) }}"
+      raum_gueltig: "{%- set s = states(raumfuehler) if raumfuehler.startswith('sensor.') else state_attr(raumfuehler, 'current_temperature') -%}{{ is_number(s) }}"
+      modus_jetzt: "{{ states(klima_modus) }}"
+      aktiv_jetzt: "{{ is_state(klima_schalter, 'on') }}"
+      fenster_offen: "{{ fensterkontakte | select('is_state', 'on') | list | count > 0 }}"
+      anwesenheit_gesetzt: "{{ anwesenheit is string and anwesenheit != '' }}"
+      anwesend: "{{ not (anwesenheit is string and anwesenheit != '') or states(anwesenheit) in ['home', 'on'] }}"
+      profil_ok: "{{ states(heizprofil) in kuehl_profile or (haus_heizung_aus is string and haus_heizung_aus != '' and is_state(haus_heizung_aus, 'on')) }}"
+      ein_ab: "{{ states(zieltemperatur) | float(22) + ein_ueber | float }}"
+      aus_ab: "{{ states(zieltemperatur) | float(22) - aus_unter | float }}"
+  - alias: "Entscheidung genau einmal bestimmen"
+    variables:
+      entscheidung: >-
+        {%- if trigger.id == 'schalter' -%}anzeige
+        {%- elif anwesenheit_gesetzt and not anwesend and (aktiv_jetzt or (abwesend_aus and modus_jetzt != 'Aus')) -%}abwesend
+        {%- elif anwesenheit_gesetzt and not anwesend -%}keine
+        {%- elif modus_jetzt == 'Aus' -%}{{ 'aus' if aktiv_jetzt else 'keine' }}
+        {%- elif not profil_ok -%}sperre_aus
+        {%- elif fenster_offen -%}{{ 'fenster_pause' if aktiv_jetzt and trigger.id == 'fenster_offen' else 'keine' }}
+        {%- elif modus_jetzt == 'Manuell Kühlen' -%}{{ 'ein' if not aktiv_jetzt else 'keine' }}
+        {%- elif modus_jetzt == 'Automatik Kühlen' and raum_gueltig and raum_temp > ein_ab and not aktiv_jetzt -%}ein
+        {%- elif modus_jetzt == 'Automatik Kühlen' and raum_gueltig and raum_temp < aus_ab and aktiv_jetzt -%}aus
+        {%- else -%}keine{%- endif -%}
+  - alias: "Nichts zu tun"
+    condition: "template"
+    value_template: "{{ entscheidung != 'keine' }}"
+  - alias: "Testbetrieb: Entscheidung nur protokollieren"
+    if:
+      - alias: "Testbetrieb (Anzeige wird trotzdem angeglichen)"
+        condition: "template"
+        value_template: "{{ not produktiv and entscheidung != 'anzeige' }}"
+    then:
+      - alias: "Geplante Aktion ins Logbuch"
+        action: "logbook.log"
+        data:
+          name: "{{ raum_name }} Klima (Test)"
+          message: "Geplant: {{ entscheidung }} · Raum {{ raum_temp }} °C · Ziel {{ states(zieltemperatur) }} · Modus {{ modus_jetzt }} · Steckdose {{ states(klima_schalter) }}"
+          entity_id: "{{ klima_aktiv }}"
+      - alias: "Testlauf beenden"
+        stop: "Testbetrieb"
+  - alias: "Entscheidung ausführen"
+    choose:
+      - alias: "Steckdose wurde geschaltet: Anzeige angleichen"
+        conditions:
+          - alias: "Anzeige"
+            condition: "template"
+            value_template: "{{ entscheidung == 'anzeige' }}"
+        sequence:
+          - alias: "Anzeige „Klimaanlage läuft“ an den tatsächlichen Steckdosen-Zustand angleichen"
+            if:
+              - alias: "Anzeige weicht ab"
+                condition: "template"
+                value_template: "{{ is_state(klima_schalter, 'on') != is_state(klima_aktiv, 'on') }}"
+            then:
+              - alias: "Anzeige setzen"
+                action: "{{ 'input_boolean.turn_on' if is_state(klima_schalter, 'on') else 'input_boolean.turn_off' }}"
+                target:
+                  entity_id: "{{ klima_aktiv }}"
+      - alias: "Niemand mehr anwesend: Klimaanlage aus (und Klima-Modus aus, falls gewählt)"
+        conditions:
+          - alias: "Abwesend"
+            condition: "template"
+            value_template: "{{ entscheidung == 'abwesend' }}"
+        sequence:
+          - alias: "Steckdose ausschalten"
+            action: "homeassistant.turn_off"
+            target:
+              entity_id: "{{ klima_schalter }}"
+            continue_on_error: true
+          - alias: "Klima-Modus auf Aus, falls gewählt"
+            if:
+              - alias: "Beim Verlassen ausschalten"
+                condition: "template"
+                value_template: "{{ abwesend_aus and modus_jetzt != 'Aus' }}"
+            then:
+              - alias: "Klima-Modus Aus"
+                action: "input_select.select_option"
+                target:
+                  entity_id: "{{ klima_modus }}"
+                data:
+                  option: "Aus"
+          - alias: "Im Logbuch festhalten"
+            action: "logbook.log"
+            data:
+              name: "{{ raum_name }} Klima"
+              message: "Niemand anwesend ({{ states(anwesenheit) }}) – Klimaanlage ausgeschaltet."
+              entity_id: "{{ klima_aktiv }}"
+      - alias: "Klima-Modus Aus oder Ziel erreicht: Steckdose aus"
+        conditions:
+          - alias: "Aus"
+            condition: "template"
+            value_template: "{{ entscheidung == 'aus' }}"
+        sequence:
+          - alias: "Steckdose ausschalten"
+            action: "homeassistant.turn_off"
+            target:
+              entity_id: "{{ klima_schalter }}"
+            continue_on_error: true
+      - alias: "Kühlen nicht erlaubt (Heizprofil): Steckdose aus und Klima-Modus auf Aus"
+        conditions:
+          - alias: "Sperre"
+            condition: "template"
+            value_template: "{{ entscheidung == 'sperre_aus' }}"
+        sequence:
+          - alias: "Steckdose ausschalten"
+            action: "homeassistant.turn_off"
+            target:
+              entity_id: "{{ klima_schalter }}"
+            continue_on_error: true
+          - alias: "Klima-Modus auf Aus"
+            action: "input_select.select_option"
+            target:
+              entity_id: "{{ klima_modus }}"
+            data:
+              option: "Aus"
+          - alias: "Im Logbuch festhalten"
+            action: "logbook.log"
+            data:
+              name: "{{ raum_name }} Klima"
+              message: "Kühlen im Heizprofil {{ states(heizprofil) }} nicht erlaubt – Klimaanlage aus."
+              entity_id: "{{ klima_aktiv }}"
+      - alias: "Fenster offen: Klimaanlage pausieren (Modus bleibt)"
+        conditions:
+          - alias: "Fensterpause"
+            condition: "template"
+            value_template: "{{ entscheidung == 'fenster_pause' }}"
+        sequence:
+          - alias: "Steckdose ausschalten"
+            action: "homeassistant.turn_off"
+            target:
+              entity_id: "{{ klima_schalter }}"
+            continue_on_error: true
+      - alias: "Kühlen: Steckdose ein"
+        conditions:
+          - alias: "Ein"
+            condition: "template"
+            value_template: "{{ entscheidung == 'ein' }}"
+        sequence:
+          - alias: "Steckdose einschalten"
+            action: "homeassistant.turn_on"
+            target:
+              entity_id: "{{ klima_schalter }}"
+            continue_on_error: true

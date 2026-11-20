@@ -1,0 +1,457 @@
+homeassistant:
+  name: HZ-Test
+  time_zone: Europe/Berlin
+  unit_system: metric
+  country: DE
+  latitude: 50.0
+  longitude: 8.0
+http:
+  server_port: 8124
+frontend:
+config:
+logbook:
+lovelace:
+persistent_notification:
+search:
+hz_testgeraete:
+automation: !include automations.yaml
+script: !include scripts.yaml
+logger:
+  default: warning
+  logs:
+    custom_components.heizung_universal: debug
+timer:
+schedule:
+input_text:
+input_select:
+input_boolean:
+  heizung_aus_global:
+    name: Haus Heizung Aus
+  f_buero_1:
+    name: Schalter Fenster buero 1
+  f_buero_2:
+    name: Schalter Fenster buero 2
+  heizer_bt_buero:
+    name: Heizer bt buero
+  heizer_trv_buero:
+    name: Heizer trv buero
+  f_bad_1:
+    name: Schalter Fenster bad 1
+  f_bad_2:
+    name: Schalter Fenster bad 2
+  heizer_bt_bad:
+    name: Heizer bt bad
+  heizer_trv_bad:
+    name: Heizer trv bad
+  f_wohnzimmer_1:
+    name: Schalter Fenster wohnzimmer 1
+  f_wohnzimmer_2:
+    name: Schalter Fenster wohnzimmer 2
+  heizer_bt_wohnzimmer:
+    name: Heizer bt wohnzimmer
+  heizer_trv_wohnzimmer:
+    name: Heizer trv wohnzimmer
+  f_gast_1:
+    name: Schalter Fenster gast 1
+  f_gast_2:
+    name: Schalter Fenster gast 2
+  heizer_bt_gast:
+    name: Heizer bt gast
+  heizer_trv_gast:
+    name: Heizer trv gast
+  f_schlaf_1:
+    name: Schalter Fenster schlaf 1
+  f_schlaf_2:
+    name: Schalter Fenster schlaf 2
+  heizer_bt_schlaf:
+    name: Heizer bt schlaf
+  heizer_trv_schlaf:
+    name: Heizer trv schlaf
+  f_keller_1:
+    name: Schalter Fenster keller 1
+  f_keller_2:
+    name: Schalter Fenster keller 2
+  heizer_bt_keller:
+    name: Heizer bt keller
+  heizer_trv_keller:
+    name: Heizer trv keller
+  f_neu_1:
+    name: Schalter Fenster neu 1
+  f_neu_2:
+    name: Schalter Fenster neu 2
+  heizer_bt_neu:
+    name: Heizer bt neu
+  heizer_trv_neu:
+    name: Heizer trv neu
+input_number:
+  t_aussen:
+    name: Wert Aussen
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 8
+    mode: box
+  e_soc:
+    name: Wert soc
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 96
+    mode: box
+  e_netz:
+    name: Wert netz
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 1500
+    mode: box
+  e_akku:
+    name: Wert akku
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 0
+    mode: box
+  e_pvl:
+    name: Wert pvl
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 3000
+    mode: box
+  e_last:
+    name: Wert last
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 800
+    mode: box
+  t_buero:
+    name: Wert Temperatur buero
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 19
+    mode: box
+  t_bad:
+    name: Wert Temperatur bad
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 19
+    mode: box
+  t_wohnzimmer:
+    name: Wert Temperatur wohnzimmer
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 19
+    mode: box
+  t_gast:
+    name: Wert Temperatur gast
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 19
+    mode: box
+  t_schlaf:
+    name: Wert Temperatur schlaf
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 19
+    mode: box
+  t_keller:
+    name: Wert Temperatur keller
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 19
+    mode: box
+  t_neu:
+    name: Wert Temperatur neu
+    min: -30
+    max: 100000
+    step: 0.1
+    initial: 19
+    mode: box
+template:
+  - sensor:
+      - name: "Aussentemperatur"
+        unique_id: t_aussen
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.t_aussen') }}"
+      - name: "Aussentemperatur neu"
+        unique_id: t_aussen_neu
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.t_aussen') }}"
+      - name: "Energie soc"
+        unique_id: e_soc
+        state: "{{ states('input_number.e_soc') }}"
+        attributes:
+          pv_last_update: "{{ now().isoformat() }}"
+      - name: "trv schlaf ventil offnungsgrad"
+        unique_id: trv_schlaf_ventil
+        unit_of_measurement: "%"
+        state: "0"
+      - name: "Energie netz"
+        unique_id: e_netz
+        state: "{{ states('input_number.e_netz') }}"
+      - name: "Energie akku"
+        unique_id: e_akku
+        state: "{{ states('input_number.e_akku') }}"
+      - name: "Energie pvl"
+        unique_id: e_pvl
+        state: "{{ states('input_number.e_pvl') }}"
+      - name: "Energie last"
+        unique_id: e_last
+        state: "{{ states('input_number.e_last') }}"
+      - name: "Temperatur buero"
+        unique_id: t_buero
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.t_buero') }}"
+      - name: "Temperatur bad"
+        unique_id: t_bad
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.t_bad') }}"
+      - name: "Temperatur wohnzimmer"
+        unique_id: t_wohnzimmer
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.t_wohnzimmer') }}"
+      - name: "Temperatur gast"
+        unique_id: t_gast
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.t_gast') }}"
+      - name: "Temperatur schlaf"
+        unique_id: t_schlaf
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.t_schlaf') }}"
+      - name: "Temperatur keller"
+        unique_id: t_keller
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.t_keller') }}"
+      - name: "Temperatur neu"
+        unique_id: t_neu
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.t_neu') }}"
+  - binary_sensor:
+      - name: "Fenster buero 1"
+        unique_id: f_buero_1
+        device_class: window
+        state: "{{ states('input_boolean.f_buero_1') }}"
+      - name: "Fenster buero 2"
+        unique_id: f_buero_2
+        device_class: window
+        state: "{{ states('input_boolean.f_buero_2') }}"
+      - name: "Fenster bad 1"
+        unique_id: f_bad_1
+        device_class: window
+        state: "{{ states('input_boolean.f_bad_1') }}"
+      - name: "Fenster bad 2"
+        unique_id: f_bad_2
+        device_class: window
+        state: "{{ states('input_boolean.f_bad_2') }}"
+      - name: "Fenster wohnzimmer 1"
+        unique_id: f_wohnzimmer_1
+        device_class: window
+        state: "{{ states('input_boolean.f_wohnzimmer_1') }}"
+      - name: "Fenster wohnzimmer 2"
+        unique_id: f_wohnzimmer_2
+        device_class: window
+        state: "{{ states('input_boolean.f_wohnzimmer_2') }}"
+      - name: "Fenster gast 1"
+        unique_id: f_gast_1
+        device_class: window
+        state: "{{ states('input_boolean.f_gast_1') }}"
+      - name: "Fenster gast 2"
+        unique_id: f_gast_2
+        device_class: window
+        state: "{{ states('input_boolean.f_gast_2') }}"
+      - name: "Fenster schlaf 1"
+        unique_id: f_schlaf_1
+        device_class: window
+        state: "{{ states('input_boolean.f_schlaf_1') }}"
+      - name: "Fenster schlaf 2"
+        unique_id: f_schlaf_2
+        device_class: window
+        state: "{{ states('input_boolean.f_schlaf_2') }}"
+      - name: "Fenster keller 1"
+        unique_id: f_keller_1
+        device_class: window
+        state: "{{ states('input_boolean.f_keller_1') }}"
+      - name: "Fenster keller 2"
+        unique_id: f_keller_2
+        device_class: window
+        state: "{{ states('input_boolean.f_keller_2') }}"
+      - name: "Fenster neu 1"
+        unique_id: f_neu_1
+        device_class: window
+        state: "{{ states('input_boolean.f_neu_1') }}"
+      - name: "Fenster neu 2"
+        unique_id: f_neu_2
+        device_class: window
+        state: "{{ states('input_boolean.f_neu_2') }}"
+climate:
+  - platform: generic_thermostat
+    name: BT buero
+    unique_id: bt_buero
+    heater: input_boolean.heizer_bt_buero
+    target_sensor: sensor.temperatur_buero
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: TRV buero
+    unique_id: trv_buero
+    heater: input_boolean.heizer_trv_buero
+    target_sensor: sensor.temperatur_buero
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: BT bad
+    unique_id: bt_bad
+    heater: input_boolean.heizer_bt_bad
+    target_sensor: sensor.temperatur_bad
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: TRV bad
+    unique_id: trv_bad
+    heater: input_boolean.heizer_trv_bad
+    target_sensor: sensor.temperatur_bad
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: BT wohnzimmer
+    unique_id: bt_wohnzimmer
+    heater: input_boolean.heizer_bt_wohnzimmer
+    target_sensor: sensor.temperatur_wohnzimmer
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: TRV wohnzimmer
+    unique_id: trv_wohnzimmer
+    heater: input_boolean.heizer_trv_wohnzimmer
+    target_sensor: sensor.temperatur_wohnzimmer
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: BT gast
+    unique_id: bt_gast
+    heater: input_boolean.heizer_bt_gast
+    target_sensor: sensor.temperatur_gast
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: BT schlaf
+    unique_id: bt_schlaf
+    heater: input_boolean.heizer_bt_schlaf
+    target_sensor: sensor.temperatur_schlaf
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: TRV gast
+    unique_id: trv_gast
+    heater: input_boolean.heizer_trv_gast
+    target_sensor: sensor.temperatur_gast
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: TRV schlaf
+    unique_id: trv_schlaf
+    heater: input_boolean.heizer_trv_schlaf
+    target_sensor: sensor.temperatur_schlaf
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: BT keller
+    unique_id: bt_keller
+    heater: input_boolean.heizer_bt_keller
+    target_sensor: sensor.temperatur_keller
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: TRV keller
+    unique_id: trv_keller
+    heater: input_boolean.heizer_trv_keller
+    target_sensor: sensor.temperatur_keller
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: BT neu
+    unique_id: bt_neu
+    heater: input_boolean.heizer_bt_neu
+    target_sensor: sensor.temperatur_neu
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
+  - platform: generic_thermostat
+    name: TRV neu
+    unique_id: trv_neu
+    heater: input_boolean.heizer_trv_neu
+    target_sensor: sensor.temperatur_neu
+    min_temp: 5
+    max_temp: 30
+    target_temp: 7
+    initial_hvac_mode: heat
+    precision: 0.1
+    target_temp_step: 0.5
